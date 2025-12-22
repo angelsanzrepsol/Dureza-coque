@@ -1,12 +1,11 @@
 # ============================================================
 # APP STREAMLIT – MODELO PREDICTIVO DE DUREZA DE COQUE
+# ESTRUCTURA BASE CON SIDEBAR DE DATOS Y PESTAÑAS VACÍAS
 # ============================================================
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import pickle
+import zipfile
 from pathlib import Path
 from PIL import Image, ImageFilter
 
@@ -19,35 +18,47 @@ st.set_page_config(
 )
 
 # ============================================================
-# ESTÉTICA (MISMA QUE TUS APPS)
+# ESTÉTICA (INDUSTRIAL – COPIADA DE TUS APPS)
 # ============================================================
 st.markdown("""
 <style>
+
+/* Fondo general */
 html, body, .block-container, [class*="stApp"] {
     background-color: #FFFFFF !important;
     color: #333333 !important;
 }
+
+/* Títulos */
 h1, h2, h3, h4, h5, h6 {
     color: #D98B3B !important;
     font-weight: 800 !important;
 }
+
+/* Título azul oscuro */
 .darkblue-title {
     color: #0B1A33 !important;
     font-weight: 800 !important;
 }
+
+/* Tabs */
 .stTabs [data-baseweb="tab"] p {
     color: #666666 !important;
     font-weight: 600 !important;
 }
+
 .stTabs [aria-selected="true"] p {
     color: red !important;
     font-weight: 700 !important;
 }
+
+/* Botones */
 .stButton>button {
     background-color: #D98B3B !important;
     color: white !important;
     border-radius: 8px;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -61,29 +72,96 @@ st.markdown(
 
 logo_path = Path("logo_repsol.png")
 if logo_path.exists():
-    logo = Image.open(logo_path).convert("RGBA")
-    blur = 12
-    pad = blur * 4
-    canvas = Image.new("RGBA", (logo.width + pad, logo.height + pad), (255,255,255,0))
-    canvas.paste(logo, (pad//2, pad//2), logo)
-    halo = canvas.split()[3].filter(ImageFilter.GaussianBlur(blur))
-    canvas.putalpha(halo)
-    st.image(canvas, width=180)
+    try:
+        logo = Image.open(logo_path).convert("RGBA")
+        blur = 12
+        pad = blur * 4
+
+        canvas = Image.new(
+            "RGBA",
+            (logo.width + pad, logo.height + pad),
+            (255, 255, 255, 0)
+        )
+
+        canvas.paste(logo, (pad // 2, pad // 2), logo)
+
+        mask = canvas.split()[3]
+        halo = mask.filter(ImageFilter.GaussianBlur(blur))
+        canvas.putalpha(halo)
+
+        st.image(canvas, width=180)
+    except Exception:
+        st.warning("No se pudo cargar el logo.")
+else:
+    st.info("Archivo logo_repsol.png no encontrado.")
 
 # ============================================================
-# CARGA DE MODELO (SOLO INFERENCIA)
+# FUNCIÓN DE LECTURA DE DATOS DE PROCESO
 # ============================================================
-@st.cache_resource
-def cargar_modelo(path="models/modelo_dureza.pkl"):
-    if not Path(path).exists():
+def leer_datos_proceso(uploaded_file):
+    """
+    Lee datos de proceso desde:
+    - CSV
+    - Excel (xlsx / xls)
+    - ZIP con CSVs
+
+    Devuelve un DataFrame o None si hay error.
+    """
+    if uploaded_file is None:
         return None
-    with open(path, "rb") as f:
-        return pickle.load(f)
 
-modelo = cargar_modelo()
+    try:
+        # CSV
+        if uploaded_file.name.lower().endswith(".csv"):
+            return pd.read_csv(uploaded_file)
+
+        # Excel
+        if uploaded_file.name.lower().endswith((".xlsx", ".xls")):
+            return pd.read_excel(uploaded_file)
+
+        # ZIP con CSVs
+        if uploaded_file.name.lower().endswith(".zip"):
+            dfs = []
+            with zipfile.ZipFile(uploaded_file) as z:
+                for fname in z.namelist():
+                    if fname.lower().endswith(".csv"):
+                        with z.open(fname) as f:
+                            dfs.append(pd.read_csv(f))
+            if len(dfs) == 0:
+                return None
+            return pd.concat(dfs, ignore_index=True)
+
+    except Exception as e:
+        st.sidebar.error(f"Error leyendo datos: {e}")
+        return None
 
 # ============================================================
-# PESTAÑAS OBLIGATORIAS (5)
+# SIDEBAR — CARGA DE DATOS DE PROCESO
+# ============================================================
+st.sidebar.header("Datos de proceso")
+
+uploaded_proceso = st.sidebar.file_uploader(
+    "Subir datos de proceso",
+    type=["csv", "xlsx", "xls", "zip"],
+    help="Archivo con variables de proceso (incluye columna temporal)"
+)
+
+df_proceso = None
+
+if uploaded_proceso is not None:
+    df_proceso = leer_datos_proceso(uploaded_proceso)
+
+    if df_proceso is not None and not df_proceso.empty:
+        st.sidebar.success(
+            f"Datos cargados: {df_proceso.shape[0]} filas, {df_proceso.shape[1]} columnas"
+        )
+    else:
+        st.sidebar.error("No se pudieron cargar los datos")
+else:
+    st.sidebar.info("No hay datos de proceso cargados")
+
+# ============================================================
+# PESTAÑAS OBLIGATORIAS (VACÍAS)
 # ============================================================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Inicio / Visión General",
@@ -94,106 +172,31 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # ============================================================
-# PESTAÑA 1 — INICIO
+# PESTAÑA 1 — VACÍA
 # ============================================================
 with tab1:
-    st.subheader("Visión general")
-
-    st.markdown("""
-**Proceso de coquización**
-
-El proceso de coquización transforma carbón en coque metalúrgico mediante
-calentamiento controlado en ausencia de oxígeno. La **dureza focalizada**
-es un indicador clave de calidad mecánica y comportamiento en el alto horno.
-""")
-
-    st.markdown("""
-**Descripción del modelo**
-
-El modelo predice la **dureza focalizada del coque** a partir de:
-- Variables operativas (temperatura, tiempo, condiciones del horno)
-- Variables de composición del carbón
-
-⚠️ El modelo es válido **solo dentro del rango histórico de entrenamiento**.
-""")
-
-    st.markdown("""
-**Indicadores del modelo**
-- R²: 0.87  
-- RMSE: 2.1 unidades de dureza  
-- Fecha de entrenamiento: 2024-11-12  
-- Versión: v1.0
-""")
-
-    st.warning(
-        "Este modelo es una herramienta de apoyo a la decisión. "
-        "No sustituye el criterio del ingeniero de proceso."
-    )
+    pass
 
 # ============================================================
-# PESTAÑA 2 — DATOS DE PROCESO
+# PESTAÑA 2 — VACÍA
 # ============================================================
 with tab2:
-    st.subheader("Datos históricos de proceso")
-
-    uploaded = st.file_uploader("Cargar dataset histórico (CSV)", type="csv")
-
-    if uploaded:
-        df = pd.read_csv(uploaded)
-        st.dataframe(df, use_container_width=True)
-
-        st.markdown("### Estadística descriptiva")
-        st.dataframe(df.describe().T)
+    pass
 
 # ============================================================
-# PESTAÑA 3 — EXPLORACIÓN
+# PESTAÑA 3 — VACÍA
 # ============================================================
 with tab3:
-    st.subheader("Exploración y correlaciones")
-
-    if uploaded:
-        corr = df.corr(numeric_only=True)
-
-        fig, ax = plt.subplots(figsize=(10,6))
-        im = ax.imshow(corr, cmap="coolwarm")
-        ax.set_xticks(range(len(corr)))
-        ax.set_yticks(range(len(corr)))
-        ax.set_xticklabels(corr.columns, rotation=90)
-        ax.set_yticklabels(corr.columns)
-        plt.colorbar(im, ax=ax)
-        st.pyplot(fig)
+    pass
 
 # ============================================================
-# PESTAÑA 4 — MODELO
+# PESTAÑA 4 — VACÍA
 # ============================================================
 with tab4:
-    st.subheader("Modelo predictivo")
-
-    if modelo is None:
-        st.error("Modelo no cargado")
-    else:
-        st.success("Modelo cargado correctamente")
-
-        if hasattr(modelo, "feature_names_in_"):
-            st.markdown("**Variables de entrada:**")
-            st.write(list(modelo.feature_names_in_))
+    pass
 
 # ============================================================
-# PESTAÑA 5 — SIMULADOR
+# PESTAÑA 5 — VACÍA
 # ============================================================
 with tab5:
-    st.subheader("Simulador de operación")
-
-    st.markdown("Introduce condiciones operativas:")
-
-    temp = st.slider("Temperatura del horno (°C)", 900, 1300, 1100)
-    tiempo = st.slider("Tiempo de coquización (h)", 10, 30, 20)
-
-    if st.button("Calcular dureza"):
-        if modelo:
-            X = pd.DataFrame([{
-                "Temperatura": temp,
-                "Tiempo": tiempo
-            }])
-            pred = modelo.predict(X)[0]
-            st.metric("Dureza predicha", f"{pred:.2f}")
+    pass
