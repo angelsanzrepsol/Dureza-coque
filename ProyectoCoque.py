@@ -102,38 +102,44 @@ else:
 def leer_datos_proceso(uploaded_file):
     """
     Lee datos de proceso desde:
-    - CSV
-    - Excel (xlsx / xls)
-    - ZIP con CSVs
+    - CSV (coma o punto y coma)
+    - Excel (.xlsx, .xls)
 
     Devuelve un DataFrame o None si hay error.
     """
     if uploaded_file is None:
         return None
 
-    try:
-        # CSV
-        if uploaded_file.name.lower().endswith(".csv"):
-            return pd.read_csv(uploaded_file)
+    nombre = uploaded_file.name.lower()
 
+    try:
+        # --------------------------------------------------
+        # CSV
+        # --------------------------------------------------
+        if nombre.endswith(".csv"):
+            try:
+                # Intento 1: separado por coma
+                df = pd.read_csv(uploaded_file, sep=",")
+                if df.shape[1] == 1:
+                    raise ValueError("Solo una columna detectada")
+            except Exception:
+                # Intento 2: separado por punto y coma
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=";")
+
+            return df
+
+        # --------------------------------------------------
         # Excel
-        if uploaded_file.name.lower().endswith((".xlsx", ".xls")):
+        # --------------------------------------------------
+        if nombre.endswith((".xlsx", ".xls")):
             return pd.read_excel(uploaded_file)
 
-        # ZIP con CSVs
-        if uploaded_file.name.lower().endswith(".zip"):
-            dfs = []
-            with zipfile.ZipFile(uploaded_file) as z:
-                for fname in z.namelist():
-                    if fname.lower().endswith(".csv"):
-                        with z.open(fname) as f:
-                            dfs.append(pd.read_csv(f))
-            if len(dfs) == 0:
-                return None
-            return pd.concat(dfs, ignore_index=True)
+        st.sidebar.error("Formato de archivo no soportado")
+        return None
 
     except Exception as e:
-        st.sidebar.error(f"Error leyendo datos: {e}")
+        st.sidebar.error(f"Error leyendo archivo: {e}")
         return None
 
 # ============================================================
