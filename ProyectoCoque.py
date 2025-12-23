@@ -8,12 +8,13 @@ import pandas as pd
 import zipfile
 from pathlib import Path
 from PIL import Image, ImageFilter
+import matplotlib.pyplot as plt
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
 # ============================================================
 st.set_page_config(
-    page_title="Modelo predictivo de dureza de coque",
+    page_title="Análisis dureza de coque",
     layout="wide"
 )
 
@@ -181,7 +182,143 @@ with tab1:
 # PESTAÑA 2 — VACÍA
 # ============================================================
 with tab2:
-    pass
+    st.subheader("Datos de proceso – Visualización")
+
+    if df_proceso is None:
+        st.info("Carga datos de proceso en la barra lateral para comenzar.")
+    else:
+        df = df_proceso.copy()
+
+        # --------------------------------------------------
+        # Limpieza básica
+        # --------------------------------------------------
+        for c in df.columns:
+            if c != "Tiempo":
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+
+        # Detectar columna Tiempo
+        tiene_tiempo = False
+        if "Tiempo" in df.columns:
+            try:
+                df["Tiempo"] = pd.to_datetime(df["Tiempo"], errors="coerce")
+                tiene_tiempo = True
+            except Exception:
+                tiene_tiempo = False
+
+        # --------------------------------------------------
+        # Columnas numéricas
+        # --------------------------------------------------
+        cols_numericas = [c for c in df.columns if c != "Tiempo"]
+
+        if len(cols_numericas) == 0:
+            st.warning("No hay variables numéricas para visualizar.")
+        else:
+            # Inicialización segura
+            y_var = cols_numericas[0]
+            x_var = "Tiempo" if tiene_tiempo else cols_numericas[0]
+
+            # --------------------------------------------------
+            # Selectores
+            # --------------------------------------------------
+            col1, col2 = st.columns(2)
+
+            with col1:
+                y_var = st.selectbox(
+                    "Variable a analizar (Y)",
+                    options=cols_numericas,
+                    index=0
+                )
+
+            with col2:
+                x_mode = st.radio(
+                    "Eje X",
+                    options=["Tiempo", "Otra variable"],
+                    index=0 if tiene_tiempo else 1
+                )
+
+                if x_mode == "Otra variable":
+                    opciones_x = [c for c in cols_numericas if c != y_var]
+                    if len(opciones_x) > 0:
+                        x_var = st.selectbox(
+                            "Variable X",
+                            options=opciones_x
+                        )
+                    else:
+                        x_var = None
+                else:
+                    x_var = "Tiempo" if tiene_tiempo else None
+
+            # --------------------------------------------------
+            # Filtros
+            # --------------------------------------------------
+            st.markdown("### Filtros")
+
+            colf1, colf2 = st.columns(2)
+
+            with colf1:
+                max_puntos = st.slider(
+                    "Máximo número de puntos a mostrar",
+                    min_value=100,
+                    max_value=len(df),
+                    value=min(len(df), 2000),
+                    step=100
+                )
+
+            with colf2:
+                quitar_nulos = st.checkbox("Eliminar valores nulos", value=True)
+
+            # --------------------------------------------------
+            # Preparar datos
+            # --------------------------------------------------
+            plot_df = df.copy()
+
+            if quitar_nulos:
+                subset = [y_var]
+                if x_var not in (None, "Tiempo"):
+                    subset.append(x_var)
+                plot_df = plot_df.dropna(subset=subset)
+
+            plot_df = plot_df.iloc[:max_puntos]
+
+            # --------------------------------------------------
+            # Gráfica
+            # --------------------------------------------------
+            st.markdown("### Visualización")
+
+            if plot_df.empty or x_var is None:
+                st.warning("No hay datos suficientes para graficar.")
+            else:
+                fig, ax = plt.subplots(figsize=(10, 6))
+
+                if x_var == "Tiempo" and tiene_tiempo:
+                    ax.scatter(
+                        plot_df["Tiempo"],
+                        plot_df[y_var],
+                        s=15,
+                        alpha=0.7
+                    )
+                    ax.set_xlabel("Tiempo")
+                else:
+                    ax.scatter(
+                        plot_df[x_var],
+                        plot_df[y_var],
+                        s=15,
+                        alpha=0.7
+                    )
+                    ax.set_xlabel(x_var)
+
+                ax.set_ylabel(y_var)
+                ax.set_title(f"{y_var} vs {x_var}")
+                ax.grid(True)
+
+                st.pyplot(fig)
+
+            # --------------------------------------------------
+            # Vista previa
+            # --------------------------------------------------
+            with st.expander("Ver datos utilizados en la gráfica"):
+                st.dataframe(plot_df.head(500))
+
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
