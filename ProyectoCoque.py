@@ -67,7 +67,7 @@ h1, h2, h3, h4, h5, h6 {
 # CABECERA + LOGO
 # ============================================================
 st.markdown(
-    "<h1 class='darkblue-title'>Modelo predictivo de dureza focalizada del coque</h1>",
+    "<h1 class='darkblue-title'>Análisis dureza del coque</h1>",
     unsafe_allow_html=True
 )
 
@@ -188,143 +188,213 @@ with tab1:
 # PESTAÑA 2 — VACÍA
 # ============================================================
 with tab2:
-    st.subheader("Datos de proceso – Visualización")
+    st.header("Análisis visual interactivo de proceso")
 
-    if df_proceso is None:
-        st.info("Carga datos de proceso en la barra lateral para comenzar.")
+    # ==============================
+    # COMPROBACIÓN DE DATOS
+    # ==============================
+    if df_proceso is None or df_proceso.empty:
+        st.warning("No hay datos de proceso cargados")
+        st.stop()
+
+    df = df_proceso.copy()
+
+    # ==============================
+    # NORMALIZACIÓN ROBUSTA (CLAVE)
+    # ==============================
+
+    # Convertir posibles columnas de fecha
+    for col in df.columns:
+        if any(k in col.lower() for k in ["date", "inicio", "fin"]):
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    # Forzar columnas numéricas (incluye PROM_*)
+    for col in df.columns:
+        if col not in df.select_dtypes(include=["datetime64[ns]"]).columns:
+            df[col] = (
+                df[col]
+                .astype(str)
+                .str.replace(",", ".", regex=False)
+                .str.replace(" ", "", regex=False)
+            )
+            df[col] = pd.to_numeric(df[col], errors="ignore")
+
+    # ==============================
+    # SELECCIÓN DE COLUMNAS
+    # ==============================
+    columnas_num = df.select_dtypes(include="number").columns.tolist()
+    columnas_fecha = df.select_dtypes(include=["datetime64[ns]"]).columns.tolist()
+
+    if len(columnas_num) < 2:
+        st.error("No se detectaron suficientes variables numéricas")
+        st.stop()
+
+    # ==============================
+    # SELECTORES VISUALES
+    # ==============================
+    st.markdown("## Selección de variables")
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        var_x = st.selectbox("Variable eje X", columnas_num, index=0)
+
+    with c2:
+        var_y = st.selectbox("Variable eje Y", columnas_num, index=1)
+
+    with c3:
+        var_color = st.selectbox(
+            "Color por variable",
+            ["Ninguna"] + columnas_num
+        )
+
+    # ==============================
+    # FILTROS POR RANGO
+    # ==============================
+    st.markdown("## Filtros")
+
+    fx_min, fx_max = float(df[var_x].min()), float(df[var_x].max())
+    fy_min, fy_max = float(df[var_y].min()), float(df[var_y].max())
+
+    f1, f2 = st.columns(2)
+
+    with f1:
+        rango_x = st.slider(
+            f"Rango {var_x}",
+            fx_min, fx_max,
+            (fx_min, fx_max)
+        )
+
+    with f2:
+        rango_y = st.slider(
+            f"Rango {var_y}",
+            fy_min, fy_max,
+            (fy_min, fy_max)
+        )
+
+    df_f = df[
+        (df[var_x] >= rango_x[0]) & (df[var_x] <= rango_x[1]) &
+        (df[var_y] >= rango_y[0]) & (df[var_y] <= rango_y[1])
+    ]
+
+    # ==============================
+    # SCATTER PRINCIPAL
+    # ==============================
+    st.markdown("## Relación entre variables")
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    if var_color == "Ninguna":
+        sc = ax.scatter(
+            df_f[var_x],
+            df_f[var_y],
+            alpha=0.7,
+            edgecolors="k"
+        )
     else:
-        df = df_proceso.copy()
+        sc = ax.scatter(
+            df_f[var_x],
+            df_f[var_y],
+            c=df_f[var_color],
+            cmap="viridis",
+            alpha=0.8,
+            edgecolors="k"
+        )
+        cbar = plt.colorbar(sc, ax=ax)
+        cbar.set_label(var_color)
 
-        # --------------------------------------------------
-        # Limpieza básica
-        # --------------------------------------------------
-        for c in df.columns:
-            if c != "Tiempo":
-                df[c] = pd.to_numeric(df[c], errors="coerce")
+    ax.set_xlabel(var_x)
+    ax.set_ylabel(var_y)
+    ax.grid(True)
 
-        # Detectar columna Tiempo
-        tiene_tiempo = False
-        if "Tiempo" in df.columns:
-            try:
-                df["Tiempo"] = pd.to_datetime(df["Tiempo"], errors="coerce")
-                tiene_tiempo = True
-            except Exception:
-                tiene_tiempo = False
+    st.pyplot(fig)
 
-        # --------------------------------------------------
-        # Columnas numéricas
-        # --------------------------------------------------
-        cols_numericas = [c for c in df.columns if c != "Tiempo"]
+    # ==============================
+    # MÉTRICAS CLAVE
+    # ==============================
+    st.markdown("## Métricas rápidas")
 
-        if len(cols_numericas) == 0:
-            st.warning("No hay variables numéricas para visualizar.")
-        else:
-            # Inicialización segura
-            y_var = cols_numericas[0]
-            x_var = "Tiempo" if tiene_tiempo else cols_numericas[0]
+    m1, m2, m3, m4 = st.columns(4)
 
-            # --------------------------------------------------
-            # Selectores
-            # --------------------------------------------------
-            col1, col2 = st.columns(2)
+    with m1:
+        st.metric("Puntos", len(df_f))
 
-            with col1:
-                y_var = st.selectbox(
-                    "Variable a analizar (Y)",
-                    options=cols_numericas,
-                    index=0
-                )
+    with m2:
+        st.metric(
+            "Correlación",
+            f"{df_f[[var_x, var_y]].corr().iloc[0,1]:.3f}"
+        )
 
-            with col2:
-                x_mode = st.radio(
-                    "Eje X",
-                    options=["Tiempo", "Otra variable"],
-                    index=0 if tiene_tiempo else 1
-                )
+    with m3:
+        st.metric(f"Media {var_x}", f"{df_f[var_x].mean():.2f}")
 
-                if x_mode == "Otra variable":
-                    opciones_x = [c for c in cols_numericas if c != y_var]
-                    if len(opciones_x) > 0:
-                        x_var = st.selectbox(
-                            "Variable X",
-                            options=opciones_x
-                        )
-                    else:
-                        x_var = None
-                else:
-                    x_var = "Tiempo" if tiene_tiempo else None
+    with m4:
+        st.metric(f"Media {var_y}", f"{df_f[var_y].mean():.2f}")
 
-            # --------------------------------------------------
-            # Filtros
-            # --------------------------------------------------
-            st.markdown("### Filtros")
+    # ==============================
+    # DISTRIBUCIONES
+    # ==============================
+    st.markdown("## Distribución de variables")
 
-            colf1, colf2 = st.columns(2)
+    d1, d2 = st.columns(2)
 
-            with colf1:
-                max_puntos = st.slider(
-                    "Máximo número de puntos a mostrar",
-                    min_value=100,
-                    max_value=len(df),
-                    value=min(len(df), 2000),
-                    step=100
-                )
+    with d1:
+        fig, ax = plt.subplots(figsize=(5, 3))
+        ax.hist(df_f[var_x].dropna(), bins=30, edgecolor="black")
+        ax.set_title(var_x)
+        ax.grid(True)
+        st.pyplot(fig)
 
-            with colf2:
-                quitar_nulos = st.checkbox("Eliminar valores nulos", value=True)
+    with d2:
+        fig, ax = plt.subplots(figsize=(5, 3))
+        ax.hist(df_f[var_y].dropna(), bins=30, edgecolor="black")
+        ax.set_title(var_y)
+        ax.grid(True)
+        st.pyplot(fig)
 
-            # --------------------------------------------------
-            # Preparar datos
-            # --------------------------------------------------
-            plot_df = df.copy()
+    # ==============================
+    # BOXPLOTS (OUTLIERS)
+    # ==============================
+    st.markdown("## Boxplots (detección de outliers)")
 
-            if quitar_nulos:
-                subset = [y_var]
-                if x_var not in (None, "Tiempo"):
-                    subset.append(x_var)
-                plot_df = plot_df.dropna(subset=subset)
+    b1, b2 = st.columns(2)
 
-            plot_df = plot_df.iloc[:max_puntos]
+    with b1:
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax.boxplot(df_f[var_x].dropna(), vert=False)
+        ax.set_title(var_x)
+        st.pyplot(fig)
 
-            # --------------------------------------------------
-            # Gráfica
-            # --------------------------------------------------
-            st.markdown("### Visualización")
+    with b2:
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax.boxplot(df_f[var_y].dropna(), vert=False)
+        ax.set_title(var_y)
+        st.pyplot(fig)
 
-            if plot_df.empty or x_var is None:
-                st.warning("No hay datos suficientes para graficar.")
-            else:
-                fig, ax = plt.subplots(figsize=(10, 6))
+    # ==============================
+    # MAPA DE CORRELACIONES
+    # ==============================
+    st.markdown("## Mapa de correlaciones")
 
-                if x_var == "Tiempo" and tiene_tiempo:
-                    ax.scatter(
-                        plot_df["Tiempo"],
-                        plot_df[y_var],
-                        s=15,
-                        alpha=0.7
-                    )
-                    ax.set_xlabel("Tiempo")
-                else:
-                    ax.scatter(
-                        plot_df[x_var],
-                        plot_df[y_var],
-                        s=15,
-                        alpha=0.7
-                    )
-                    ax.set_xlabel(x_var)
+    vars_corr = st.multiselect(
+        "Selecciona variables para correlación",
+        columnas_num,
+        default=columnas_num[:5]
+    )
 
-                ax.set_ylabel(y_var)
-                ax.set_title(f"{y_var} vs {x_var}")
-                ax.grid(True)
+    if len(vars_corr) >= 2:
+        corr = df[vars_corr].corr()
 
-                st.pyplot(fig)
+        fig, ax = plt.subplots(figsize=(6, 5))
+        im = ax.imshow(corr, cmap="coolwarm", vmin=-1, vmax=1)
 
-            # --------------------------------------------------
-            # Vista previa
-            # --------------------------------------------------
-            with st.expander("Ver datos utilizados en la gráfica"):
-                st.dataframe(plot_df.head(500))
+        ax.set_xticks(range(len(vars_corr)))
+        ax.set_yticks(range(len(vars_corr)))
+        ax.set_xticklabels(vars_corr, rotation=45, ha="right")
+        ax.set_yticklabels(vars_corr)
 
+        plt.colorbar(im, ax=ax)
+        st.pyplot(fig)
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
