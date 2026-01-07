@@ -188,7 +188,7 @@ with tab1:
 # PESTAÑA 2 — VACÍA
 # ============================================================
 with tab2:
-    st.header("Análisis visual interactivo de proceso")
+    st.header("📊 Análisis visual y modelado del proceso")
 
     # ==============================
     # COMPROBACIÓN DE DATOS
@@ -200,15 +200,12 @@ with tab2:
     df = df_proceso.copy()
 
     # ==============================
-    # NORMALIZACIÓN FUERTE (CLAVE)
+    # NORMALIZACIÓN FUERTE
     # ==============================
-
-    # 1. Convertir fechas
     for col in df.columns:
         if any(k in col.lower() for k in ["date", "inicio", "fin"]):
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # 2. Forzar TODAS las demás columnas a numéricas
     for col in df.columns:
         if not pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = (
@@ -220,43 +217,32 @@ with tab2:
             )
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # ==============================
-    # DETECCIÓN DE COLUMNAS
-    # ==============================
     columnas_num = df.select_dtypes(include="number").columns.tolist()
-    columnas_fecha = df.select_dtypes(include=["datetime64[ns]"]).columns.tolist()
-
-    # 🔍 DEBUG VISUAL (MUY ÚTIL)
-    st.caption(f"Variables numéricas detectadas: {len(columnas_num)}")
 
     if len(columnas_num) < 2:
-        st.error("No se detectaron suficientes variables numéricas tras normalización")
-        st.write("Columnas detectadas:", df.dtypes)
+        st.error("No hay suficientes variables numéricas")
         st.stop()
 
     # ==============================
-    # SELECTORES VISUALES
+    # SELECTORES
     # ==============================
-    st.markdown("## Selección de variables")
+    st.markdown("## 🔧 Selección de variables")
 
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        var_x = st.selectbox("Variable eje X", columnas_num, index=0)
+        var_x = st.selectbox("Variable X", columnas_num, index=0)
 
     with c2:
-        var_y = st.selectbox("Variable eje Y", columnas_num, index=1)
+        var_y = st.selectbox("Variable Y", columnas_num, index=1)
 
     with c3:
-        var_color = st.selectbox(
-            "Color por variable",
-            ["Ninguna"] + columnas_num
-        )
+        var_color = st.selectbox("Color por", ["Ninguna"] + columnas_num)
 
     # ==============================
-    # FILTROS POR RANGO
+    # FILTROS
     # ==============================
-    st.markdown("## Filtros")
+    st.markdown("## 🎚️ Filtros de datos")
 
     fx_min, fx_max = float(df[var_x].min()), float(df[var_x].max())
     fy_min, fy_max = float(df[var_y].min()), float(df[var_y].max())
@@ -264,18 +250,10 @@ with tab2:
     f1, f2 = st.columns(2)
 
     with f1:
-        rango_x = st.slider(
-            f"Rango {var_x}",
-            fx_min, fx_max,
-            (fx_min, fx_max)
-        )
+        rango_x = st.slider(f"Rango {var_x}", fx_min, fx_max, (fx_min, fx_max))
 
     with f2:
-        rango_y = st.slider(
-            f"Rango {var_y}",
-            fy_min, fy_max,
-            (fy_min, fy_max)
-        )
+        rango_y = st.slider(f"Rango {var_y}", fy_min, fy_max, (fy_min, fy_max))
 
     df_f = df[
         (df[var_x] >= rango_x[0]) & (df[var_x] <= rango_x[1]) &
@@ -283,36 +261,116 @@ with tab2:
     ]
 
     # ==============================
-    # SCATTER PRINCIPAL
+    # OPCIONES DE MODELADO
     # ==============================
-    st.markdown("## Relación entre variables")
+    st.markdown("## 🤖 Modelado")
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    c4, c5 = st.columns(2)
+
+    with c4:
+        usar_lineal = st.checkbox("Regresión lineal", value=True)
+        usar_polinomica = st.checkbox("Regresión polinómica")
+
+    with c5:
+        grado = st.slider("Grado polinómico", 2, 5, 2)
+
+    # ==============================
+    # PREPARAR DATOS
+    # ==============================
+    df_modelo = df_f[[var_x, var_y]].dropna()
+
+    if len(df_modelo) < 5:
+        st.warning("No hay suficientes datos tras los filtros")
+        st.stop()
+
+    X = df_modelo[[var_x]].values
+    y = df_modelo[var_y].values
+
+    # ==============================
+    # VISUALIZACIÓN
+    # ==============================
+    st.markdown("## 📈 Relación y tendencia")
+
+    fig, ax = plt.subplots(figsize=(9, 6))
 
     if var_color == "Ninguna":
-        sc = ax.scatter(
-            df_f[var_x],
-            df_f[var_y],
-            alpha=0.7,
-            edgecolors="k"
-        )
+        ax.scatter(X, y, alpha=0.7, edgecolors="k")
     else:
-        sc = ax.scatter(
-            df_f[var_x],
-            df_f[var_y],
-            c=df_f[var_color],
-            cmap="viridis",
-            alpha=0.8,
-            edgecolors="k"
-        )
-        cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label(var_color)
+        sc = ax.scatter(X, y, c=df_modelo[var_color], cmap="viridis", alpha=0.8)
+        plt.colorbar(sc, ax=ax, label=var_color)
+
+    resultados = []
+
+    # ==============================
+    # REGRESIÓN LINEAL
+    # ==============================
+    if usar_lineal:
+        from sklearn.linear_model import LinearRegression
+        from sklearn.metrics import r2_score, mean_squared_error
+        import numpy as np
+
+        lin = LinearRegression()
+        lin.fit(X, y)
+
+        x_line = np.linspace(X.min(), X.max(), 200).reshape(-1, 1)
+        y_line = lin.predict(x_line)
+
+        ax.plot(x_line, y_line, color="red", lw=2, label="Lineal")
+
+        y_pred = lin.predict(X)
+        resultados.append({
+            "Modelo": "Lineal",
+            "R2": r2_score(y, y_pred),
+            "MSE": mean_squared_error(y, y_pred),
+            "RMSE": mean_squared_error(y, y_pred, squared=False),
+            "Ecuación": f"{var_y} = {lin.coef_[0]:.4f}·{var_x} + {lin.intercept_:.4f}"
+        })
+
+    # ==============================
+    # REGRESIÓN POLINÓMICA
+    # ==============================
+    if usar_polinomica:
+        from sklearn.preprocessing import PolynomialFeatures
+
+        poly = PolynomialFeatures(degree=grado)
+        Xp = poly.fit_transform(X)
+
+        lin_p = LinearRegression()
+        lin_p.fit(Xp, y)
+
+        Xp_line = poly.transform(x_line)
+        y_poly = lin_p.predict(Xp_line)
+
+        ax.plot(x_line, y_poly, lw=2, linestyle="--", label=f"Polinómica (grado {grado})")
+
+        y_pred_p = lin_p.predict(Xp)
+        resultados.append({
+            "Modelo": f"Polinómica g{grado}",
+            "R2": r2_score(y, y_pred_p),
+            "MSE": mean_squared_error(y, y_pred_p),
+            "RMSE": mean_squared_error(y, y_pred_p, squared=False),
+            "Ecuación": "Polinómica"
+        })
 
     ax.set_xlabel(var_x)
     ax.set_ylabel(var_y)
     ax.grid(True)
+    ax.legend()
 
     st.pyplot(fig)
+
+    # ==============================
+    # RESULTADOS NUMÉRICOS
+    # ==============================
+    st.markdown("## 📊 Métricas del modelo")
+
+    if resultados:
+        df_res = pd.DataFrame(resultados)
+        st.dataframe(df_res.style.format({
+            "R2": "{:.4f}",
+            "MSE": "{:.4f}",
+            "RMSE": "{:.4f}"
+        }))
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
