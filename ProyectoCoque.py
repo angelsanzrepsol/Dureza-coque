@@ -318,7 +318,269 @@ with tab2:
 # PESTAÑA 3 — VACÍA
 # ============================================================
 with tab3:
-    pass
+    st.header("Análisis avanzado de variables")
+    st.write(
+        "Análisis numérico con correlaciones, modelos predictivos "
+        "y explicabilidad (SHAP / LIME)."
+    )
+
+    # -------------------------------------------------
+    # COMPROBACIÓN
+    # -------------------------------------------------
+    if "datos" not in st.session_state:
+        st.warning("Primero carga un archivo en la pestaña de carga.")
+        st.stop()
+
+    datos = st.session_state["datos"].copy()
+
+    # -------------------------------------------------
+    # NORMALIZACIÓN ROBUSTA
+    # -------------------------------------------------
+    for col in datos.columns:
+        if any(k in str(col).lower() for k in ["date", "inicio", "fin", "time"]):
+            datos[col] = pd.to_datetime(datos[col], errors="coerce")
+        else:
+            datos[col] = (
+                datos[col]
+                .astype(str)
+                .str.replace(",", ".", regex=False)
+                .str.replace(" ", "", regex=False)
+                .str.replace("nan", "", regex=False)
+            )
+            datos[col] = pd.to_numeric(datos[col], errors="coerce")
+
+    # -------------------------------------------------
+    # VARIABLES NUMÉRICAS
+    # -------------------------------------------------
+    columnas_num = [
+        c for c in datos.columns
+        if pd.api.types.is_numeric_dtype(datos[c])
+    ]
+
+    if len(columnas_num) < 2:
+        st.error("No hay suficientes variables numéricas.")
+        st.stop()
+
+    # -------------------------------------------------
+    # VARIABLE OBJETIVO Y EXCLUSIÓN
+    # -------------------------------------------------
+    target = st.selectbox("Variable objetivo (Y)", columnas_num)
+
+    excluir = st.multiselect(
+        "Variables a excluir (opcional)",
+        options=[c for c in columnas_num if c != target]
+    )
+
+    columnas_finales = [c for c in columnas_num if c not in excluir]
+
+    df_model = datos[columnas_finales].dropna(subset=[target])
+
+    X = df_model.drop(columns=[target])
+    y = df_model[target]
+
+    if X.shape[0] < 10 or X.shape[1] == 0:
+        st.error("Datos insuficientes para análisis.")
+        st.stop()
+
+    # -------------------------------------------------
+    # CORRELACIONES (TABLAS)
+    # -------------------------------------------------
+    st.subheader("Matriz de correlaciones (Pearson)")
+
+    corr_matrix = df_model.corr()
+
+    st.dataframe(corr_matrix.style.format("{:.3f}"))
+
+    st.subheader("Ranking de correlación respecto a la variable objetivo")
+
+    ranking_corr = (
+        corr_matrix[target]
+        .drop(target)
+        .sort_values(key=lambda x: abs(x), ascending=False)
+        .rename("Correlación")
+        .to_frame()
+    )
+
+    st.dataframe(ranking_corr.style.format("{:.3f}"))
+
+    # -------------------------------------------------
+    # SELECCIÓN DE MODELO
+    # -------------------------------------------------
+    st.markdown("---")
+    st.subheader("Modelo predictivo")
+
+    modelo_sel = st.selectbox(
+        "Modelo",
+        [
+            "Random Forest",
+            "Gradient Boosting",
+            "XGBoost",
+            "LightGBM",
+            "Regresión lineal (OLS)"
+        ]
+    )
+
+    n_estim = st.slider("Nº árboles (si aplica)", 50, 1000, 200)
+    max_depth = st.slider("Max depth (0 = automático)", 0, 30, 6)
+
+    usar_shap = st.checkbox("Calcular SHAP", value=True)
+    usar_lime = st.checkbox("Calcular LIME", value=False)
+
+    # -------------------------------------------------
+    # CREAR MODELO
+    # -------------------------------------------------
+    model = None
+
+    if modelo_sel == "Random Forest":
+        from sklearn.ensemble import RandomForestRegressor
+        model = RandomForestRegressor(
+            n_estimators=n_estim,
+            max_depth=None if max_depth == 0 else max_depth,
+            random_state=42,
+            n_jobs=-1
+        )
+
+    elif modelo_sel == "Gradient Boosting":
+        from sklearn.ensemble import GradientBoostingRegressor
+        model = GradientBoostingRegressor(
+            n_estimators=n_estim,
+            max_depth=None if max_depth == 0 else max_depth,
+            random_state=42
+        )
+
+    elif modelo_sel == "XGBoost":
+        import xgboost as xgb
+        model = xgb.XGBRegressor(
+            n_estimators=n_estim,
+            max_depth=0 if max_depth == 0 else max_depth,
+            random_state=42,
+            n_jobs=-1
+        )
+
+    elif modelo_sel == "LightGBM":
+        import lightgbm as lgb
+        model = lgb.LGBMRegressor(
+            n_estimators=n_estim,
+            max_depth=-1 if max_depth == 0 else max_depth,
+            random_state=42,
+            n_jobs=-1
+        )
+
+    elif modelo_sel == "Regresión lineal (OLS)":
+        from sklearn.linear_model import LinearRegression
+        model = LinearRegression()
+
+    # -------------------------------------------------
+    # ENTRENAMIENTO
+    # -------------------------------------------------
+    with st.spinner("Entrenando modelo..."):
+        model.fit(X.fillna(0), y)
+
+    st.success("Modelo entrenado correctamente")
+
+    # -------------------------------------------------
+    # IMPORTANCIAS
+    # -------------------------------------------------
+    if hasattr(model, "feature_importances_"):
+        st.subheader("Importancia de variables (modelo)")
+        ranking_imp = (
+            pd.DataFrame({
+                "Variable": X.columns,
+                "Importancia": model.feature_importances_
+            })
+            .sort_values("Importancia", ascending=False)
+        )
+        st.dataframe(ranking_imp)
+
+    # -------------------------------------------------
+    # SHAP
+    # -------------------------------------------------
+    if usar_shap:
+        st.markdown("---")
+        st.subheader("SHAP – explicación global")
+
+        import shap
+        import numpy as np
+
+        try:
+            if modelo_sel in ["Random Forest", "Gradient Boosting", "XGBoost", "LightGBM"]:
+                explainer = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(X.fillna(0))
+            else:
+                explainer = shap.LinearExplainer(model, X.fillna(0))
+                shap_values = explainer.shap_values(X.fillna(0))
+
+            if isinstance(shap_values, list):
+                shap_values = shap_values[0]
+
+            mean_abs = np.abs(shap_values).mean(axis=0)
+
+            shap_df = (
+                pd.DataFrame({
+                    "Variable": X.columns,
+                    "MeanAbsSHAP": mean_abs
+                })
+                .sort_values("MeanAbsSHAP", ascending=False)
+            )
+
+            st.dataframe(shap_df)
+
+        except Exception as e:
+            st.error(f"Error calculando SHAP: {e}")
+
+    # -------------------------------------------------
+    # LIME
+    # -------------------------------------------------
+    if usar_lime:
+        st.markdown("---")
+        st.subheader("LIME – explicación local")
+
+        try:
+            from lime.lime_tabular import LimeTabularExplainer
+            import streamlit.components.v1 as components
+
+            idx = st.number_input(
+                "Índice de fila a explicar",
+                min_value=0,
+                max_value=len(X) - 1,
+                value=0,
+                step=1
+            )
+
+            explainer_lime = LimeTabularExplainer(
+                training_data=X.fillna(0).values,
+                feature_names=list(X.columns),
+                mode="regression"
+            )
+
+            exp = explainer_lime.explain_instance(
+                X.fillna(0).iloc[idx].values,
+                model.predict,
+                num_features=min(10, X.shape[1])
+            )
+
+            components.html(exp.as_html(), height=400)
+
+        except Exception as e:
+            st.error(f"Error con LIME: {e}")
+
+    # -------------------------------------------------
+    # EXPORTACIÓN
+    # -------------------------------------------------
+    st.markdown("---")
+    st.subheader("Exportar resultados")
+
+    st.download_button(
+        "Descargar matriz de correlaciones (CSV)",
+        data=corr_matrix.to_csv().encode("utf-8"),
+        file_name="correlaciones.csv"
+    )
+
+    st.download_button(
+        "Descargar ranking de correlaciones (CSV)",
+        data=ranking_corr.to_csv().encode("utf-8"),
+        file_name="ranking_correlaciones.csv"
+    )
 
 # ============================================================
 # PESTAÑA 4 — VACÍA
