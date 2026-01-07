@@ -200,33 +200,38 @@ with tab2:
     df = df_proceso.copy()
 
     # ==============================
-    # NORMALIZACIÓN ROBUSTA (CLAVE)
+    # NORMALIZACIÓN FUERTE (CLAVE)
     # ==============================
 
-    # Convertir posibles columnas de fecha
+    # 1. Convertir fechas
     for col in df.columns:
         if any(k in col.lower() for k in ["date", "inicio", "fin"]):
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Forzar columnas numéricas (incluye PROM_*)
+    # 2. Forzar TODAS las demás columnas a numéricas
     for col in df.columns:
-        if col not in df.select_dtypes(include=["datetime64[ns]"]).columns:
+        if not pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = (
                 df[col]
                 .astype(str)
                 .str.replace(",", ".", regex=False)
                 .str.replace(" ", "", regex=False)
+                .str.replace("nan", "", regex=False)
             )
-            df[col] = pd.to_numeric(df[col], errors="ignore")
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # ==============================
-    # SELECCIÓN DE COLUMNAS
+    # DETECCIÓN DE COLUMNAS
     # ==============================
     columnas_num = df.select_dtypes(include="number").columns.tolist()
     columnas_fecha = df.select_dtypes(include=["datetime64[ns]"]).columns.tolist()
 
+    # 🔍 DEBUG VISUAL (MUY ÚTIL)
+    st.caption(f"Variables numéricas detectadas: {len(columnas_num)}")
+
     if len(columnas_num) < 2:
-        st.error("No se detectaron suficientes variables numéricas")
+        st.error("No se detectaron suficientes variables numéricas tras normalización")
+        st.write("Columnas detectadas:", df.dtypes)
         st.stop()
 
     # ==============================
@@ -308,93 +313,6 @@ with tab2:
     ax.grid(True)
 
     st.pyplot(fig)
-
-    # ==============================
-    # MÉTRICAS CLAVE
-    # ==============================
-    st.markdown("## Métricas rápidas")
-
-    m1, m2, m3, m4 = st.columns(4)
-
-    with m1:
-        st.metric("Puntos", len(df_f))
-
-    with m2:
-        st.metric(
-            "Correlación",
-            f"{df_f[[var_x, var_y]].corr().iloc[0,1]:.3f}"
-        )
-
-    with m3:
-        st.metric(f"Media {var_x}", f"{df_f[var_x].mean():.2f}")
-
-    with m4:
-        st.metric(f"Media {var_y}", f"{df_f[var_y].mean():.2f}")
-
-    # ==============================
-    # DISTRIBUCIONES
-    # ==============================
-    st.markdown("## Distribución de variables")
-
-    d1, d2 = st.columns(2)
-
-    with d1:
-        fig, ax = plt.subplots(figsize=(5, 3))
-        ax.hist(df_f[var_x].dropna(), bins=30, edgecolor="black")
-        ax.set_title(var_x)
-        ax.grid(True)
-        st.pyplot(fig)
-
-    with d2:
-        fig, ax = plt.subplots(figsize=(5, 3))
-        ax.hist(df_f[var_y].dropna(), bins=30, edgecolor="black")
-        ax.set_title(var_y)
-        ax.grid(True)
-        st.pyplot(fig)
-
-    # ==============================
-    # BOXPLOTS (OUTLIERS)
-    # ==============================
-    st.markdown("## Boxplots (detección de outliers)")
-
-    b1, b2 = st.columns(2)
-
-    with b1:
-        fig, ax = plt.subplots(figsize=(4, 3))
-        ax.boxplot(df_f[var_x].dropna(), vert=False)
-        ax.set_title(var_x)
-        st.pyplot(fig)
-
-    with b2:
-        fig, ax = plt.subplots(figsize=(4, 3))
-        ax.boxplot(df_f[var_y].dropna(), vert=False)
-        ax.set_title(var_y)
-        st.pyplot(fig)
-
-    # ==============================
-    # MAPA DE CORRELACIONES
-    # ==============================
-    st.markdown("## Mapa de correlaciones")
-
-    vars_corr = st.multiselect(
-        "Selecciona variables para correlación",
-        columnas_num,
-        default=columnas_num[:5]
-    )
-
-    if len(vars_corr) >= 2:
-        corr = df[vars_corr].corr()
-
-        fig, ax = plt.subplots(figsize=(6, 5))
-        im = ax.imshow(corr, cmap="coolwarm", vmin=-1, vmax=1)
-
-        ax.set_xticks(range(len(vars_corr)))
-        ax.set_yticks(range(len(vars_corr)))
-        ax.set_xticklabels(vars_corr, rotation=45, ha="right")
-        ax.set_yticklabels(vars_corr)
-
-        plt.colorbar(im, ax=ax)
-        st.pyplot(fig)
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
