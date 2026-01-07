@@ -356,6 +356,11 @@ with tab3:
         c for c in datos.columns
         if pd.api.types.is_numeric_dtype(datos[c])
     ]
+    # Eliminar columnas completamente vacías
+    columnas_num = [
+        c for c in columnas_num
+        if datos[c].notna().sum() > 0
+    ]
 
     if len(columnas_num) < 2:
         st.error("No hay suficientes variables numéricas.")
