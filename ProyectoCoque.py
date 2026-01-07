@@ -325,13 +325,13 @@ with tab3:
     )
 
     # -------------------------------------------------
-    # COMPROBACIÓN
+    # COMPROBACIÓN (USANDO df_proceso)
     # -------------------------------------------------
-    if "datos" not in st.session_state:
-        st.warning("Primero carga un archivo en la pestaña de carga.")
+    if df_proceso is None or df_proceso.empty:
+        st.warning("No hay datos cargados para análisis.")
         st.stop()
 
-    datos = st.session_state["datos"].copy()
+    datos = df_proceso.copy()
 
     # -------------------------------------------------
     # NORMALIZACIÓN ROBUSTA
@@ -356,6 +356,7 @@ with tab3:
         c for c in datos.columns
         if pd.api.types.is_numeric_dtype(datos[c])
     ]
+
     # Eliminar columnas completamente vacías
     columnas_num = [
         c for c in columnas_num
