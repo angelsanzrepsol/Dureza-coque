@@ -4,3 +4,8 @@ numpy
 matplotlib
 Pillow
 openpyxl
+scikit-learn
+shap
+lime
+xgboost
+lightgbm
