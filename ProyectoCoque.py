@@ -1,7 +1,3 @@
-# ============================================================
-# APP STREAMLIT – MODELO PREDICTIVO DE DUREZA DE COQUE
-# ESTRUCTURA BASE CON SIDEBAR DE DATOS Y PESTAÑAS VACÍAS
-# ============================================================
 
 import streamlit as st
 import pandas as pd
@@ -9,6 +5,7 @@ import zipfile
 from pathlib import Path
 from PIL import Image, ImageFilter
 import matplotlib.pyplot as plt
+import plotly.express as px
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -113,9 +110,7 @@ def leer_datos_proceso(uploaded_file):
     nombre = uploaded_file.name.lower()
 
     try:
-        # --------------------------------------------------
         # CSV
-        # --------------------------------------------------
         if nombre.endswith(".csv"):
             try:
                 # Intento 1: separado por coma
@@ -129,9 +124,7 @@ def leer_datos_proceso(uploaded_file):
 
             return df
 
-        # --------------------------------------------------
         # Excel
-        # --------------------------------------------------
         if nombre.endswith((".xlsx", ".xls")):
             return pd.read_excel(uploaded_file)
 
@@ -185,10 +178,85 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — VACÍA
+# PESTAÑA 2 — GRAFICADO INTERACTIVO
 # ============================================================
 with tab2:
-    pass
+
+    st.subheader("📈 Graficado interactivo de variables de proceso")
+
+    if df_proceso is None or df_proceso.empty:
+        st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
+    else:
+        # -----------------------------
+        # Selección de columnas numéricas
+        # -----------------------------
+        columnas_numericas = df_proceso.select_dtypes(include="number").columns.tolist()
+
+        if len(columnas_numericas) < 2:
+            st.error("Se necesitan al menos dos columnas numéricas para graficar.")
+        else:
+            col1, col2, col3 = st.columns([1, 1, 1])
+
+            with col1:
+                x_var = st.selectbox(
+                    "Variable eje X",
+                    columnas_numericas,
+                    key="x_var_tab2"
+                )
+
+            with col2:
+                y_var = st.selectbox(
+                    "Variable eje Y",
+                    columnas_numericas,
+                    index=1 if len(columnas_numericas) > 1 else 0,
+                    key="y_var_tab2"
+                )
+
+            with col3:
+                color_var = st.selectbox(
+                    "Color (opcional)",
+                    ["Ninguno"] + df_proceso.columns.tolist(),
+                    key="color_var_tab2"
+                )
+
+            # -----------------------------
+            # Gráfico interactivo
+            # -----------------------------
+            fig = px.scatter(
+                df_proceso,
+                x=x_var,
+                y=y_var,
+                color=None if color_var == "Ninguno" else color_var,
+                hover_data=df_proceso.columns,
+                title=f"{y_var} vs {x_var}"
+            )
+
+            fig.update_traces(marker=dict(size=10))
+            fig.update_layout(height=550)
+
+            selected = st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key="grafico_tab2"
+            )
+
+            # -----------------------------
+            # Selección de punto
+            # -----------------------------
+            st.markdown("### 🔍 Datos del punto seleccionado")
+
+            click = st.session_state.get("plotly_click")
+
+            if click:
+                punto = click["points"][0]
+                indice = punto["pointIndex"]
+
+                st.dataframe(
+                    df_proceso.iloc[[indice]],
+                    use_container_width=True
+                )
+            else:
+                st.info("Haz clic en un punto del gráfico para ver sus datos completos.")
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
