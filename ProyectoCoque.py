@@ -187,9 +187,9 @@ with tab2:
     if df_proceso is None or df_proceso.empty:
         st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
     else:
-        # -----------------------------
+        # --------------------------------------------------
         # Selección de columnas numéricas
-        # -----------------------------
+        # --------------------------------------------------
         columnas_numericas = df_proceso.select_dtypes(include="number").columns.tolist()
 
         if len(columnas_numericas) < 2:
@@ -201,7 +201,7 @@ with tab2:
                 x_var = st.selectbox(
                     "Variable eje X",
                     columnas_numericas,
-                    key="x_var_tab2"
+                    key="tab2_x"
                 )
 
             with col2:
@@ -209,19 +209,19 @@ with tab2:
                     "Variable eje Y",
                     columnas_numericas,
                     index=1 if len(columnas_numericas) > 1 else 0,
-                    key="y_var_tab2"
+                    key="tab2_y"
                 )
 
             with col3:
                 color_var = st.selectbox(
                     "Color (opcional)",
                     ["Ninguno"] + df_proceso.columns.tolist(),
-                    key="color_var_tab2"
+                    key="tab2_color"
                 )
 
-            # -----------------------------
+            # --------------------------------------------------
             # Gráfico interactivo
-            # -----------------------------
+            # --------------------------------------------------
             fig = px.scatter(
                 df_proceso,
                 x=x_var,
@@ -234,29 +234,26 @@ with tab2:
             fig.update_traces(marker=dict(size=10))
             fig.update_layout(height=550)
 
-            selected = st.plotly_chart(
+            event = st.plotly_chart(
                 fig,
                 use_container_width=True,
-                key="grafico_tab2"
+                on_select="rerun"
             )
 
-            # -----------------------------
-            # Selección de punto
-            # -----------------------------
+            # --------------------------------------------------
+            # Datos del punto seleccionado
+            # --------------------------------------------------
             st.markdown("### 🔍 Datos del punto seleccionado")
 
-            click = st.session_state.get("plotly_click")
-
-            if click:
-                punto = click["points"][0]
-                indice = punto["pointIndex"]
+            if event and event.selection and event.selection.points:
+                indices = [p["point_index"] for p in event.selection.points]
 
                 st.dataframe(
-                    df_proceso.iloc[[indice]],
+                    df_proceso.iloc[indices],
                     use_container_width=True
                 )
             else:
-                st.info("Haz clic en un punto del gráfico para ver sus datos completos.")
+                st.info("Haz clic o selecciona puntos en el gráfico para ver sus datos.")
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
