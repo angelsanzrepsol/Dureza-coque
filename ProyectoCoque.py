@@ -180,7 +180,7 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO AVANZADO CON FILTRADO REAL
+# PESTAÑA 2 — GRAFICADO AVANZADO CON TODO + EJES FIJOS
 # ============================================================
 with tab2:
 
@@ -190,7 +190,7 @@ with tab2:
         st.warning("Cargue primero un archivo de datos de proceso.")
     else:
         # --------------------------------------------------
-        # ESTADOS
+        # ESTADOS BASE
         # --------------------------------------------------
         if "df_activo_tab2" not in st.session_state:
             st.session_state.df_activo_tab2 = df_proceso.copy()
@@ -198,8 +198,26 @@ with tab2:
         if "df_eliminados_tab2" not in st.session_state:
             st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
 
+        # --------------------------------------------------
+        # LÍMITES GLOBALES DE EJES (UNA SOLA VEZ)
+        # --------------------------------------------------
+        if "axis_limits_tab2" not in st.session_state:
+            numeric = df_proceso.select_dtypes(include="number")
+
+            st.session_state.axis_limits_tab2 = {
+                "x": {
+                    col: (float(numeric[col].min()), float(numeric[col].max()))
+                    for col in numeric.columns
+                },
+                "y_global": (
+                    float(numeric.min().min()),
+                    float(numeric.max().max())
+                )
+            }
+
         df_activo = st.session_state.df_activo_tab2
         df_eliminados = st.session_state.df_eliminados_tab2
+        axis_limits = st.session_state.axis_limits_tab2
 
         # --------------------------------------------------
         # VARIABLES NUMÉRICAS
@@ -233,13 +251,12 @@ with tab2:
                 # --------------------------------------------------
                 # FILTRADO REAL POR SLIDERS (ELIMINA FILAS)
                 # --------------------------------------------------
-                st.markdown("Filtros por rango (eliminan filas fuera del rango)")
+                st.markdown("Filtros por rango (eliminan valores, no ajustan ejes)")
 
                 df_filtrado = df_activo.copy()
 
                 for col in [x_var] + y_vars:
-                    vmin = float(df_activo[col].min())
-                    vmax = float(df_activo[col].max())
+                    vmin, vmax = axis_limits["x"][col]
 
                     rmin, rmax = st.slider(
                         col,
@@ -249,14 +266,13 @@ with tab2:
                         key=f"slider_{col}"
                     )
 
-                    # FILTRADO REAL
                     df_filtrado = df_filtrado[
                         (df_filtrado[col] >= rmin) &
                         (df_filtrado[col] <= rmax)
                     ]
 
                 # --------------------------------------------------
-                # GRÁFICO + REGRESIONES (SOLO DATOS FILTRADOS)
+                # GRÁFICO MULTIVARIABLE CON EJES FIJOS
                 # --------------------------------------------------
                 fig = go.Figure()
 
@@ -266,13 +282,12 @@ with tab2:
                             x=df_filtrado[x_var],
                             y=df_filtrado[y],
                             mode="markers",
-                            name=y,
-                            customdata=df_filtrado.index
+                            name=y
                         )
                     )
 
+                    # Regresión por cada Y
                     df_reg = df_filtrado[[x_var, y]].dropna()
-
                     if len(df_reg) >= 2:
                         x = df_reg[x_var].values
                         yy = df_reg[y].values
@@ -298,35 +313,17 @@ with tab2:
                     height=550,
                     xaxis_title=x_var,
                     yaxis_title="Variables",
-                    xaxis=dict(autorange=True),
-                    yaxis=dict(autorange=True)
+                    xaxis=dict(
+                        range=axis_limits["x"][x_var],
+                        autorange=False
+                    ),
+                    yaxis=dict(
+                        range=axis_limits["y_global"],
+                        autorange=False
+                    )
                 )
 
-                event = st.plotly_chart(
-                    fig,
-                    use_container_width=True,
-                    on_select="rerun"
-                )
-
-                # --------------------------------------------------
-                # EXCLUSIÓN DESDE GRÁFICO
-                # --------------------------------------------------
-                if event and event.selection and event.selection.points:
-                    indices = list(set(p["customdata"] for p in event.selection.points))
-
-                    if st.button("Excluir puntos seleccionados del gráfico"):
-                        puntos = df_activo.loc[indices]
-
-                        st.session_state.df_eliminados_tab2 = pd.concat(
-                            [df_eliminados, puntos],
-                            ignore_index=True
-                        )
-
-                        st.session_state.df_activo_tab2 = (
-                            df_activo.drop(indices)
-                            .reset_index(drop=True)
-                        )
-                        st.rerun()
+                st.plotly_chart(fig, use_container_width=True)
 
         # --------------------------------------------------
         # EXCLUSIÓN MANUAL POR TABLA
@@ -368,7 +365,6 @@ with tab2:
             st.info("No hay puntos excluidos.")
         else:
             st.dataframe(st.session_state.df_eliminados_tab2, use_container_width=True)
-
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
