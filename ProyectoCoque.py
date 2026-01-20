@@ -178,7 +178,7 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO INTERACTIVO
+# PESTAÑA 2 — GRAFICADO INTERACTIVO CON ELIMINACIÓN DE PUNTOS
 # ============================================================
 with tab2:
 
@@ -188,14 +188,22 @@ with tab2:
         st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
     else:
         # --------------------------------------------------
+        # Inicialización del DataFrame activo
+        # --------------------------------------------------
+        if "df_activo_tab2" not in st.session_state:
+            st.session_state.df_activo_tab2 = df_proceso.copy()
+
+        df_activo = st.session_state.df_activo_tab2
+
+        # --------------------------------------------------
         # Selección de columnas numéricas
         # --------------------------------------------------
-        columnas_numericas = df_proceso.select_dtypes(include="number").columns.tolist()
+        columnas_numericas = df_activo.select_dtypes(include="number").columns.tolist()
 
         if len(columnas_numericas) < 2:
             st.error("Se necesitan al menos dos columnas numéricas para graficar.")
         else:
-            col1, col2, col3 = st.columns([1, 1, 1])
+            col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
             with col1:
                 x_var = st.selectbox(
@@ -215,19 +223,24 @@ with tab2:
             with col3:
                 color_var = st.selectbox(
                     "Color (opcional)",
-                    ["Ninguno"] + df_proceso.columns.tolist(),
+                    ["Ninguno"] + df_activo.columns.tolist(),
                     key="tab2_color"
                 )
+
+            with col4:
+                if st.button("🔄 Restaurar puntos"):
+                    st.session_state.df_activo_tab2 = df_proceso.copy()
+                    st.experimental_rerun()
 
             # --------------------------------------------------
             # Gráfico interactivo
             # --------------------------------------------------
             fig = px.scatter(
-                df_proceso,
+                df_activo,
                 x=x_var,
                 y=y_var,
                 color=None if color_var == "Ninguno" else color_var,
-                hover_data=df_proceso.columns,
+                hover_data=df_activo.columns,
                 title=f"{y_var} vs {x_var}"
             )
 
@@ -241,19 +254,28 @@ with tab2:
             )
 
             # --------------------------------------------------
-            # Datos del punto seleccionado
+            # Eliminación de puntos seleccionados
             # --------------------------------------------------
-            st.markdown("### 🔍 Datos del punto seleccionado")
+            st.markdown("### 🔍 Gestión de puntos seleccionados")
 
             if event and event.selection and event.selection.points:
                 indices = [p["point_index"] for p in event.selection.points]
 
+                st.write(f"📌 Puntos seleccionados: {len(indices)}")
+
+                if st.button("❌ Quitar puntos seleccionados"):
+                    st.session_state.df_activo_tab2 = (
+                        df_activo.drop(df_activo.index[indices])
+                        .reset_index(drop=True)
+                    )
+                    st.experimental_rerun()
+
                 st.dataframe(
-                    df_proceso.iloc[indices],
+                    df_activo.iloc[indices],
                     use_container_width=True
                 )
             else:
-                st.info("Haz clic o selecciona puntos en el gráfico para ver sus datos.")
+                st.info("Selecciona puntos en el gráfico para poder quitarlos.")
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
