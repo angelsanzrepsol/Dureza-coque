@@ -179,7 +179,7 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO INTERACTIVO CON REGRESIÓN LINEAL
+# PESTAÑA 2 — GRAFICADO INTERACTIVO CON EXCLUSIÓN MANUAL
 # ============================================================
 with tab2:
 
@@ -206,30 +206,24 @@ with tab2:
         columnas_numericas = df_activo.select_dtypes(include="number").columns.tolist()
 
         if len(columnas_numericas) < 2:
-            st.error("Se necesitan al menos dos columnas numéricas para el análisis.")
+            st.error("Se necesitan al menos dos columnas numéricas.")
         else:
             col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
             with col1:
-                x_var = st.selectbox(
-                    "Variable eje X",
-                    columnas_numericas,
-                    key="tab2_x"
-                )
+                x_var = st.selectbox("Variable eje X", columnas_numericas)
 
             with col2:
                 y_var = st.selectbox(
                     "Variable eje Y",
                     columnas_numericas,
-                    index=1 if len(columnas_numericas) > 1 else 0,
-                    key="tab2_y"
+                    index=1 if len(columnas_numericas) > 1 else 0
                 )
 
             with col3:
                 color_var = st.selectbox(
                     "Color (opcional)",
-                    ["Ninguno"] + df_activo.columns.tolist(),
-                    key="tab2_color"
+                    ["Ninguno"] + df_activo.columns.tolist()
                 )
 
             with col4:
@@ -239,31 +233,28 @@ with tab2:
                     st.rerun()
 
             # --------------------------------------------------
-            # Preparación de datos para regresión
+            # Regresión lineal sobre puntos activos
             # --------------------------------------------------
             df_reg = df_activo[[x_var, y_var]].dropna()
 
-            r2_text = "R² no disponible"
-            pendiente = None
-            intercepto = None
+            titulo = "Regresión no disponible"
 
             if len(df_reg) >= 2:
                 x = df_reg[x_var].values
                 y = df_reg[y_var].values
 
                 coef = np.polyfit(x, y, 1)
-                pendiente = coef[0]
-                intercepto = coef[1]
+                m, b = coef
 
-                y_pred = pendiente * x + intercepto
+                y_pred = m * x + b
                 ss_res = ((y - y_pred) ** 2).sum()
                 ss_tot = ((y - y.mean()) ** 2).sum()
                 r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
 
-                r2_text = f"Regresión lineal: y = {pendiente:.4f}·x + {intercepto:.4f} | R² = {r2:.4f}"
+                titulo = f"y = {m:.4f}·x + {b:.4f} | R² = {r2:.4f}"
 
             # --------------------------------------------------
-            # Gráfico interactivo con regresión
+            # Gráfico interactivo
             # --------------------------------------------------
             fig = px.scatter(
                 df_activo,
@@ -271,19 +262,13 @@ with tab2:
                 y=y_var,
                 color=None if color_var == "Ninguno" else color_var,
                 hover_data=df_activo.columns,
-                title=r2_text
+                title=titulo
             )
 
-            if pendiente is not None:
+            if len(df_reg) >= 2:
                 x_line = np.linspace(df_reg[x_var].min(), df_reg[x_var].max(), 100)
-                y_line = pendiente * x_line + intercepto
-
-                fig.add_scatter(
-                    x=x_line,
-                    y=y_line,
-                    mode="lines",
-                    name="Regresión lineal"
-                )
+                y_line = m * x_line + b
+                fig.add_scatter(x=x_line, y=y_line, mode="lines", name="Regresión lineal")
 
             fig.update_traces(marker=dict(size=10))
             fig.update_layout(height=520)
@@ -295,18 +280,18 @@ with tab2:
             )
 
             # --------------------------------------------------
-            # Eliminación de puntos seleccionados
+            # Eliminación por selección en gráfico
             # --------------------------------------------------
-            st.markdown("Puntos seleccionados")
+            st.markdown("Selección desde el gráfico")
 
             if event and event.selection and event.selection.points:
                 indices = [p["point_index"] for p in event.selection.points]
 
-                if st.button("Eliminar puntos seleccionados"):
-                    puntos_eliminados = df_activo.iloc[indices]
+                if st.button("Excluir puntos seleccionados del gráfico"):
+                    puntos = df_activo.iloc[indices]
 
                     st.session_state.df_eliminados_tab2 = pd.concat(
-                        [df_eliminados, puntos_eliminados],
+                        [df_eliminados, puntos],
                         ignore_index=True
                     )
 
@@ -314,26 +299,52 @@ with tab2:
                         df_activo.drop(df_activo.index[indices])
                         .reset_index(drop=True)
                     )
-
                     st.rerun()
 
-                st.dataframe(
-                    df_activo.iloc[indices],
-                    use_container_width=True
-                )
+                st.dataframe(df_activo.iloc[indices], use_container_width=True)
             else:
-                st.info("Seleccione puntos para eliminarlos y recalcular la regresión.")
+                st.info("Seleccione puntos en el gráfico para excluirlos.")
+
+        # --------------------------------------------------
+        # Eliminación manual por tabla
+        # --------------------------------------------------
+        st.markdown("---")
+        st.subheader("Excluir puntos manualmente desde tabla")
+
+        seleccion_tabla = st.dataframe(
+            df_activo,
+            use_container_width=True,
+            selection_mode="multi-row",
+            key="tabla_activa_tab2"
+        )
+
+        if seleccion_tabla and seleccion_tabla.selection.rows:
+            filas = seleccion_tabla.selection.rows
+
+            if st.button("Excluir filas seleccionadas de la tabla"):
+                puntos = df_activo.iloc[filas]
+
+                st.session_state.df_eliminados_tab2 = pd.concat(
+                    [df_eliminados, puntos],
+                    ignore_index=True
+                )
+
+                st.session_state.df_activo_tab2 = (
+                    df_activo.drop(df_activo.index[filas])
+                    .reset_index(drop=True)
+                )
+                st.rerun()
 
         # --------------------------------------------------
         # Tabla de puntos eliminados
         # --------------------------------------------------
         st.markdown("---")
-        st.subheader("Puntos eliminados del análisis")
+        st.subheader("Puntos excluidos del análisis")
 
         if st.session_state.df_eliminados_tab2.empty:
-            st.info("No se han eliminado puntos.")
+            st.info("No hay puntos excluidos.")
         else:
-            st.write(f"Total de puntos eliminados: {len(st.session_state.df_eliminados_tab2)}")
+            st.write(f"Total excluidos: {len(st.session_state.df_eliminados_tab2)}")
             st.dataframe(
                 st.session_state.df_eliminados_tab2,
                 use_container_width=True
