@@ -179,7 +179,7 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO INTERACTIVO CON EXCLUSIÓN MANUAL
+# PESTAÑA 2 — GRAFICADO INTERACTIVO CON REGRESIÓN Y EXCLUSIÓN
 # ============================================================
 with tab2:
 
@@ -233,20 +233,18 @@ with tab2:
                     st.rerun()
 
             # --------------------------------------------------
-            # Regresión lineal sobre puntos activos
+            # Regresión lineal dinámica
             # --------------------------------------------------
             df_reg = df_activo[[x_var, y_var]].dropna()
-
             titulo = "Regresión no disponible"
 
             if len(df_reg) >= 2:
                 x = df_reg[x_var].values
                 y = df_reg[y_var].values
 
-                coef = np.polyfit(x, y, 1)
-                m, b = coef
-
+                m, b = np.polyfit(x, y, 1)
                 y_pred = m * x + b
+
                 ss_res = ((y - y_pred) ** 2).sum()
                 ss_tot = ((y - y.mean()) ** 2).sum()
                 r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
@@ -268,7 +266,12 @@ with tab2:
             if len(df_reg) >= 2:
                 x_line = np.linspace(df_reg[x_var].min(), df_reg[x_var].max(), 100)
                 y_line = m * x_line + b
-                fig.add_scatter(x=x_line, y=y_line, mode="lines", name="Regresión lineal")
+                fig.add_scatter(
+                    x=x_line,
+                    y=y_line,
+                    mode="lines",
+                    name="Regresión lineal"
+                )
 
             fig.update_traces(marker=dict(size=10))
             fig.update_layout(height=520)
@@ -280,9 +283,9 @@ with tab2:
             )
 
             # --------------------------------------------------
-            # Eliminación por selección en gráfico
+            # Exclusión desde gráfico
             # --------------------------------------------------
-            st.markdown("Selección desde el gráfico")
+            st.markdown("Exclusión desde el gráfico")
 
             if event and event.selection and event.selection.points:
                 indices = [p["point_index"] for p in event.selection.points]
@@ -301,28 +304,27 @@ with tab2:
                     )
                     st.rerun()
 
-                st.dataframe(df_activo.iloc[indices], use_container_width=True)
-            else:
-                st.info("Seleccione puntos en el gráfico para excluirlos.")
-
         # --------------------------------------------------
-        # Eliminación manual por tabla
+        # Exclusión manual desde tabla (FORMA ROBUSTA)
         # --------------------------------------------------
         st.markdown("---")
         st.subheader("Excluir puntos manualmente desde tabla")
 
-        seleccion_tabla = st.dataframe(
-            df_activo,
+        df_tabla = df_activo.copy()
+        df_tabla["Excluir"] = False
+
+        df_editado = st.data_editor(
+            df_tabla,
             use_container_width=True,
-            selection_mode="multi-row",
-            key="tabla_activa_tab2"
+            num_rows="fixed",
+            key="editor_tab2"
         )
 
-        if seleccion_tabla and seleccion_tabla.selection.rows:
-            filas = seleccion_tabla.selection.rows
+        if st.button("Excluir filas marcadas"):
+            filas = df_editado[df_editado["Excluir"]].index.tolist()
 
-            if st.button("Excluir filas seleccionadas de la tabla"):
-                puntos = df_activo.iloc[filas]
+            if filas:
+                puntos = df_activo.loc[filas]
 
                 st.session_state.df_eliminados_tab2 = pd.concat(
                     [df_eliminados, puntos],
@@ -330,13 +332,13 @@ with tab2:
                 )
 
                 st.session_state.df_activo_tab2 = (
-                    df_activo.drop(df_activo.index[filas])
+                    df_activo.drop(filas)
                     .reset_index(drop=True)
                 )
                 st.rerun()
 
         # --------------------------------------------------
-        # Tabla de puntos eliminados
+        # Tabla de puntos excluidos
         # --------------------------------------------------
         st.markdown("---")
         st.subheader("Puntos excluidos del análisis")
