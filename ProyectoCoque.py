@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 from PIL import Image, ImageFilter
 import matplotlib.pyplot as plt
+import numpy as np
 import plotly.express as px
 
 # ============================================================
@@ -178,11 +179,11 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO INTERACTIVO CON HISTÓRICO DE ELIMINADOS
+# PESTAÑA 2 — GRAFICADO INTERACTIVO CON REGRESIÓN LINEAL
 # ============================================================
 with tab2:
 
-    st.subheader("Graficado interactivo de variables de proceso")
+    st.subheader("Graficado interactivo y regresión lineal de variables de proceso")
 
     if df_proceso is None or df_proceso.empty:
         st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
@@ -205,7 +206,7 @@ with tab2:
         columnas_numericas = df_activo.select_dtypes(include="number").columns.tolist()
 
         if len(columnas_numericas) < 2:
-            st.error("Se necesitan al menos dos columnas numéricas para graficar.")
+            st.error("Se necesitan al menos dos columnas numéricas para el análisis.")
         else:
             col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
@@ -238,7 +239,31 @@ with tab2:
                     st.rerun()
 
             # --------------------------------------------------
-            # Gráfico interactivo
+            # Preparación de datos para regresión
+            # --------------------------------------------------
+            df_reg = df_activo[[x_var, y_var]].dropna()
+
+            r2_text = "R² no disponible"
+            pendiente = None
+            intercepto = None
+
+            if len(df_reg) >= 2:
+                x = df_reg[x_var].values
+                y = df_reg[y_var].values
+
+                coef = np.polyfit(x, y, 1)
+                pendiente = coef[0]
+                intercepto = coef[1]
+
+                y_pred = pendiente * x + intercepto
+                ss_res = ((y - y_pred) ** 2).sum()
+                ss_tot = ((y - y.mean()) ** 2).sum()
+                r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
+
+                r2_text = f"Regresión lineal: y = {pendiente:.4f}·x + {intercepto:.4f} | R² = {r2:.4f}"
+
+            # --------------------------------------------------
+            # Gráfico interactivo con regresión
             # --------------------------------------------------
             fig = px.scatter(
                 df_activo,
@@ -246,8 +271,19 @@ with tab2:
                 y=y_var,
                 color=None if color_var == "Ninguno" else color_var,
                 hover_data=df_activo.columns,
-                title=f"{y_var} vs {x_var}"
+                title=r2_text
             )
+
+            if pendiente is not None:
+                x_line = np.linspace(df_reg[x_var].min(), df_reg[x_var].max(), 100)
+                y_line = pendiente * x_line + intercepto
+
+                fig.add_scatter(
+                    x=x_line,
+                    y=y_line,
+                    mode="lines",
+                    name="Regresión lineal"
+                )
 
             fig.update_traces(marker=dict(size=10))
             fig.update_layout(height=520)
@@ -261,12 +297,10 @@ with tab2:
             # --------------------------------------------------
             # Eliminación de puntos seleccionados
             # --------------------------------------------------
-            st.markdown("Puntos seleccionados en el gráfico")
+            st.markdown("Puntos seleccionados")
 
             if event and event.selection and event.selection.points:
                 indices = [p["point_index"] for p in event.selection.points]
-
-                st.write(f"Número de puntos seleccionados: {len(indices)}")
 
                 if st.button("Eliminar puntos seleccionados"):
                     puntos_eliminados = df_activo.iloc[indices]
@@ -288,10 +322,10 @@ with tab2:
                     use_container_width=True
                 )
             else:
-                st.info("Seleccione uno o varios puntos en el gráfico para eliminarlos.")
+                st.info("Seleccione puntos para eliminarlos y recalcular la regresión.")
 
         # --------------------------------------------------
-        # Tabla de puntos eliminados (debajo del gráfico)
+        # Tabla de puntos eliminados
         # --------------------------------------------------
         st.markdown("---")
         st.subheader("Puntos eliminados del análisis")
@@ -299,9 +333,7 @@ with tab2:
         if st.session_state.df_eliminados_tab2.empty:
             st.info("No se han eliminado puntos.")
         else:
-            st.write(
-                f"Total de puntos eliminados: {len(st.session_state.df_eliminados_tab2)}"
-            )
+            st.write(f"Total de puntos eliminados: {len(st.session_state.df_eliminados_tab2)}")
             st.dataframe(
                 st.session_state.df_eliminados_tab2,
                 use_container_width=True
