@@ -178,7 +178,7 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO INTERACTIVO CON ELIMINACIÓN DE PUNTOS
+# PESTAÑA 2 — GRAFICADO INTERACTIVO CON HISTÓRICO DE ELIMINADOS
 # ============================================================
 with tab2:
 
@@ -188,12 +188,16 @@ with tab2:
         st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
     else:
         # --------------------------------------------------
-        # Inicialización del DataFrame activo
+        # Inicialización de estados
         # --------------------------------------------------
         if "df_activo_tab2" not in st.session_state:
             st.session_state.df_activo_tab2 = df_proceso.copy()
 
+        if "df_eliminados_tab2" not in st.session_state:
+            st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
+
         df_activo = st.session_state.df_activo_tab2
+        df_eliminados = st.session_state.df_eliminados_tab2
 
         # --------------------------------------------------
         # Selección de columnas numéricas
@@ -228,8 +232,9 @@ with tab2:
                 )
 
             with col4:
-                if st.button("Restaurar puntos"):
+                if st.button("Restaurar todos los puntos"):
                     st.session_state.df_activo_tab2 = df_proceso.copy()
+                    st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
                     st.rerun()
 
             # --------------------------------------------------
@@ -245,7 +250,7 @@ with tab2:
             )
 
             fig.update_traces(marker=dict(size=10))
-            fig.update_layout(height=550)
+            fig.update_layout(height=520)
 
             event = st.plotly_chart(
                 fig,
@@ -256,18 +261,26 @@ with tab2:
             # --------------------------------------------------
             # Eliminación de puntos seleccionados
             # --------------------------------------------------
-            st.markdown("Datos de los puntos seleccionados")
+            st.markdown("Puntos seleccionados en el gráfico")
 
             if event and event.selection and event.selection.points:
                 indices = [p["point_index"] for p in event.selection.points]
 
-                st.write(f"Puntos seleccionados: {len(indices)}")
+                st.write(f"Número de puntos seleccionados: {len(indices)}")
 
-                if st.button("Quitar puntos seleccionados"):
+                if st.button("Eliminar puntos seleccionados"):
+                    puntos_eliminados = df_activo.iloc[indices]
+
+                    st.session_state.df_eliminados_tab2 = pd.concat(
+                        [df_eliminados, puntos_eliminados],
+                        ignore_index=True
+                    )
+
                     st.session_state.df_activo_tab2 = (
                         df_activo.drop(df_activo.index[indices])
                         .reset_index(drop=True)
                     )
+
                     st.rerun()
 
                 st.dataframe(
@@ -276,6 +289,23 @@ with tab2:
                 )
             else:
                 st.info("Seleccione uno o varios puntos en el gráfico para eliminarlos.")
+
+        # --------------------------------------------------
+        # Tabla de puntos eliminados (debajo del gráfico)
+        # --------------------------------------------------
+        st.markdown("---")
+        st.subheader("Puntos eliminados del análisis")
+
+        if st.session_state.df_eliminados_tab2.empty:
+            st.info("No se han eliminado puntos.")
+        else:
+            st.write(
+                f"Total de puntos eliminados: {len(st.session_state.df_eliminados_tab2)}"
+            )
+            st.dataframe(
+                st.session_state.df_eliminados_tab2,
+                use_container_width=True
+            )
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
