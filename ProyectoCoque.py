@@ -7,6 +7,7 @@ from PIL import Image, ImageFilter
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -179,17 +180,17 @@ with tab1:
     pass
 
 # ============================================================
-# PESTAÑA 2 — GRAFICADO INTERACTIVO CON REGRESIÓN Y EXCLUSIÓN
+# PESTAÑA 2 — GRAFICADO AVANZADO MULTIVARIABLE
 # ============================================================
 with tab2:
 
-    st.subheader("Graficado interactivo y regresión lineal de variables de proceso")
+    st.subheader("Graficado interactivo avanzado de variables de proceso")
 
     if df_proceso is None or df_proceso.empty:
         st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
     else:
         # --------------------------------------------------
-        # Inicialización de estados
+        # Estados base
         # --------------------------------------------------
         if "df_activo_tab2" not in st.session_state:
             st.session_state.df_activo_tab2 = df_proceso.copy()
@@ -201,111 +202,147 @@ with tab2:
         df_eliminados = st.session_state.df_eliminados_tab2
 
         # --------------------------------------------------
-        # Selección de columnas numéricas
+        # Columnas numéricas
         # --------------------------------------------------
         columnas_numericas = df_activo.select_dtypes(include="number").columns.tolist()
 
         if len(columnas_numericas) < 2:
             st.error("Se necesitan al menos dos columnas numéricas.")
         else:
-            col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+            # --------------------------------------------------
+            # Selección de ejes
+            # --------------------------------------------------
+            colx, coly, colr = st.columns([1, 2, 1])
 
-            with col1:
-                x_var = st.selectbox("Variable eje X", columnas_numericas)
-
-            with col2:
-                y_var = st.selectbox(
-                    "Variable eje Y",
+            with colx:
+                x_var = st.selectbox(
+                    "Variable eje X",
                     columnas_numericas,
-                    index=1 if len(columnas_numericas) > 1 else 0
+                    key="tab2_x"
                 )
 
-            with col3:
-                color_var = st.selectbox(
-                    "Color (opcional)",
-                    ["Ninguno"] + df_activo.columns.tolist()
+            with coly:
+                y_vars = st.multiselect(
+                    "Variables eje Y",
+                    [c for c in columnas_numericas if c != x_var],
+                    default=[c for c in columnas_numericas if c != x_var][:1],
+                    key="tab2_y_multi"
                 )
 
-            with col4:
+            with colr:
                 if st.button("Restaurar todos los puntos"):
                     st.session_state.df_activo_tab2 = df_proceso.copy()
                     st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
                     st.rerun()
 
-            # --------------------------------------------------
-            # Regresión lineal dinámica
-            # --------------------------------------------------
-            df_reg = df_activo[[x_var, y_var]].dropna()
-            titulo = "Regresión no disponible"
+            if not y_vars:
+                st.warning("Seleccione al menos una variable en el eje Y.")
+            else:
+                # --------------------------------------------------
+                # Sliders de rango
+                # --------------------------------------------------
+                st.markdown("Filtros de rango por variable")
 
-            if len(df_reg) >= 2:
-                x = df_reg[x_var].values
-                y = df_reg[y_var].values
+                df_filtrado = df_activo.copy()
 
-                m, b = np.polyfit(x, y, 1)
-                y_pred = m * x + b
+                for col in [x_var] + y_vars:
+                    vmin = float(df_activo[col].min())
+                    vmax = float(df_activo[col].max())
 
-                ss_res = ((y - y_pred) ** 2).sum()
-                ss_tot = ((y - y.mean()) ** 2).sum()
-                r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
+                    rango = st.slider(
+                        f"Rango permitido para {col}",
+                        min_value=vmin,
+                        max_value=vmax,
+                        value=(vmin, vmax),
+                        key=f"slider_{col}"
+                    )
 
-                titulo = f"y = {m:.4f}·x + {b:.4f} | R² = {r2:.4f}"
+                    df_filtrado = df_filtrado[
+                        (df_filtrado[col] >= rango[0]) &
+                        (df_filtrado[col] <= rango[1])
+                    ]
 
-            # --------------------------------------------------
-            # Gráfico interactivo
-            # --------------------------------------------------
-            fig = px.scatter(
-                df_activo,
-                x=x_var,
-                y=y_var,
-                color=None if color_var == "Ninguno" else color_var,
-                hover_data=df_activo.columns,
-                title=titulo
-            )
+                # --------------------------------------------------
+                # Gráfico multivariable con regresiones
+                # --------------------------------------------------
+                fig = go.Figure()
 
-            if len(df_reg) >= 2:
-                x_line = np.linspace(df_reg[x_var].min(), df_reg[x_var].max(), 100)
-                y_line = m * x_line + b
-                fig.add_scatter(
-                    x=x_line,
-                    y=y_line,
-                    mode="lines",
-                    name="Regresión lineal"
+                for y in y_vars:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_filtrado[x_var],
+                            y=df_filtrado[y],
+                            mode="markers",
+                            name=y,
+                            customdata=df_filtrado.index,
+                            hovertemplate=(
+                                f"{x_var}: %{{x}}<br>"
+                                f"{y}: %{{y}}<br>"
+                                "Índice: %{customdata}<extra></extra>"
+                            )
+                        )
+                    )
+
+                    df_reg = df_filtrado[[x_var, y]].dropna()
+
+                    if len(df_reg) >= 2:
+                        x = df_reg[x_var].values
+                        yy = df_reg[y].values
+
+                        m, b = np.polyfit(x, yy, 1)
+                        x_line = np.linspace(x.min(), x.max(), 100)
+                        y_line = m * x_line + b
+
+                        ss_res = ((yy - (m * x + b)) ** 2).sum()
+                        ss_tot = ((yy - yy.mean()) ** 2).sum()
+                        r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
+
+                        fig.add_trace(
+                            go.Scatter(
+                                x=x_line,
+                                y=y_line,
+                                mode="lines",
+                                name=f"{y} (R²={r2:.3f})"
+                            )
+                        )
+
+                fig.update_layout(
+                    height=550,
+                    xaxis_title=x_var,
+                    yaxis_title="Variables seleccionadas",
+                    legend_title="Series"
                 )
 
-            fig.update_traces(marker=dict(size=10))
-            fig.update_layout(height=520)
+                event = st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    on_select="rerun"
+                )
 
-            event = st.plotly_chart(
-                fig,
-                use_container_width=True,
-                on_select="rerun"
-            )
-
-            # --------------------------------------------------
-            # Exclusión desde gráfico
-            # --------------------------------------------------
-            st.markdown("Exclusión desde el gráfico")
-
-            if event and event.selection and event.selection.points:
-                indices = [p["point_index"] for p in event.selection.points]
-
-                if st.button("Excluir puntos seleccionados del gráfico"):
-                    puntos = df_activo.iloc[indices]
-
-                    st.session_state.df_eliminados_tab2 = pd.concat(
-                        [df_eliminados, puntos],
-                        ignore_index=True
+                # --------------------------------------------------
+                # Exclusión desde gráfico
+                # --------------------------------------------------
+                if event and event.selection and event.selection.points:
+                    indices = list(
+                        set(p["customdata"] for p in event.selection.points)
                     )
 
-                    st.session_state.df_activo_tab2 = (
-                        df_activo.drop(df_activo.index[indices])
-                        .reset_index(drop=True)
-                    )
-                    st.rerun()
+                    if st.button("Excluir puntos seleccionados del gráfico"):
+                        puntos = df_activo.loc[indices]
+
+                        st.session_state.df_eliminados_tab2 = pd.concat(
+                            [df_eliminados, puntos],
+                            ignore_index=True
+                        )
+
+                        st.session_state.df_activo_tab2 = (
+                            df_activo.drop(indices)
+                            .reset_index(drop=True)
+                        )
+                        st.rerun()
 
         # --------------------------------------------------
-        # Exclusión manual desde tabla (FORMA ROBUSTA)
+        # Exclusión manual por tabla
         # --------------------------------------------------
         st.markdown("---")
         st.subheader("Excluir puntos manualmente desde tabla")
@@ -313,14 +350,15 @@ with tab2:
         df_tabla = df_activo.copy()
         df_tabla["Excluir"] = False
 
-        df_editado = st.data_editor(
-            df_tabla,
-            use_container_width=True,
-            num_rows="fixed",
-            key="editor_tab2"
-        )
+        with st.form("form_tab2_exclusion"):
+            df_editado = st.data_editor(
+                df_tabla,
+                use_container_width=True,
+                num_rows="fixed"
+            )
+            submit = st.form_submit_button("Excluir filas marcadas")
 
-        if st.button("Excluir filas marcadas"):
+        if submit:
             filas = df_editado[df_editado["Excluir"]].index.tolist()
 
             if filas:
