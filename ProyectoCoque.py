@@ -182,7 +182,7 @@ with tab1:
 # ============================================================
 with tab2:
 
-    st.subheader("📈 Graficado interactivo de variables de proceso")
+    st.subheader("Graficado interactivo de variables de proceso")
 
     if df_proceso is None or df_proceso.empty:
         st.warning("Cargue primero un archivo de datos de proceso en la barra lateral.")
@@ -228,9 +228,9 @@ with tab2:
                 )
 
             with col4:
-                if st.button("🔄 Restaurar puntos"):
+                if st.button("Restaurar puntos"):
                     st.session_state.df_activo_tab2 = df_proceso.copy()
-                    st.experimental_rerun()
+                    st.rerun()
 
             # --------------------------------------------------
             # Gráfico interactivo
@@ -256,26 +256,26 @@ with tab2:
             # --------------------------------------------------
             # Eliminación de puntos seleccionados
             # --------------------------------------------------
-            st.markdown("### 🔍 Gestión de puntos seleccionados")
+            st.markdown("Datos de los puntos seleccionados")
 
             if event and event.selection and event.selection.points:
                 indices = [p["point_index"] for p in event.selection.points]
 
-                st.write(f"📌 Puntos seleccionados: {len(indices)}")
+                st.write(f"Puntos seleccionados: {len(indices)}")
 
-                if st.button("❌ Quitar puntos seleccionados"):
+                if st.button("Quitar puntos seleccionados"):
                     st.session_state.df_activo_tab2 = (
                         df_activo.drop(df_activo.index[indices])
                         .reset_index(drop=True)
                     )
-                    st.experimental_rerun()
+                    st.rerun()
 
                 st.dataframe(
                     df_activo.iloc[indices],
                     use_container_width=True
                 )
             else:
-                st.info("Selecciona puntos en el gráfico para poder quitarlos.")
+                st.info("Seleccione uno o varios puntos en el gráfico para eliminarlos.")
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
