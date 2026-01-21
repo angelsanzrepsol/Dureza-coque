@@ -99,144 +99,105 @@ else:
 # ============================================================
 # FUNCIÓN DE LECTURA DE DATOS DE PROCESO
 # ============================================================
-def leer_datos_proceso(uploaded_file):
-    """
-    Lee datos de proceso desde:
-    - CSV (coma o punto y coma)
-    - Excel (.xlsx, .xls)
 
-    Devuelve un DataFrame o None si hay error.
-    """
-    if uploaded_file is None:
-        return None
-
-    nombre = uploaded_file.name.lower()
-
+def leer_datos_csv(uploaded_file):
     try:
-        # CSV
-        if nombre.endswith(".csv"):
-            try:
-                # Intento 1: separado por coma
-                df = pd.read_csv(uploaded_file, sep=",")
-                if df.shape[1] == 1:
-                    raise ValueError("Solo una columna detectada")
-            except Exception:
-                # Intento 2: separado por punto y coma
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=";")
-
-            return df
-
-        # Excel
-        if nombre.endswith((".xlsx", ".xls")):
-            return pd.read_excel(uploaded_file)
-
-        st.sidebar.error("Formato de archivo no soportado")
+        try:
+            df = pd.read_csv(uploaded_file, sep=",")
+            if df.shape[1] == 1:
+                raise ValueError
+        except Exception:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, sep=";")
+        return df
+    except Exception:
         return None
 
-    except Exception as e:
-        st.sidebar.error(f"Error leyendo archivo: {e}")
-        return None
 
-st.subheader("Carga de múltiples archivos Excel")
-
-uploaded_files = st.file_uploader(
-    "Sube uno o varios archivos Excel",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True
-)
-
-def extraer_codigo_archivo(nombre):
+def leer_excel_multicamara(uploaded_file):
     """
-    Extrae códigos tipo C0004A de un nombre de archivo.
+    Lee un Excel con múltiples hojas.
+    Cada hoja que contenga C0005A, C0005B, etc. se interpreta como cámara.
     """
-    match = re.search(r"C\d{4}[A-Z]", nombre)
-    return match.group(0) if match else "SIN_CODIGO"
+    xls = pd.ExcelFile(uploaded_file)
+    camaras = {}
 
-if uploaded_files:
-    dataframes = []
+    patron = re.compile(r"C\d{4}[A-Z]")
 
-    for file in uploaded_files:
-        st.markdown(f"### Archivo: {file.name}")
+    for hoja in xls.sheet_names:
+        match = patron.search(hoja.upper())
+        if match:
+            camara = match.group()
+            df = pd.read_excel(xls, sheet_name=hoja)
+            camaras[camara] = df
 
-        codigo = extraer_codigo_archivo(file.name)
-        st.write("Código detectado:", codigo)
-
-        # Leer todas las hojas
-        hojas = pd.read_excel(file, sheet_name=None)
-
-        hoja_sel = st.selectbox(
-            f"Selecciona hoja de {file.name}",
-            hojas.keys(),
-            key=file.name
-        )
-
-        df = hojas[hoja_sel].copy()
-        df["__archivo__"] = file.name
-        df["__codigo__"] = codigo
-        df["__hoja__"] = hoja_sel
-
-        dataframes.append(df)
-
-    # Combinar todos los archivos
-    df_total = pd.concat(dataframes, ignore_index=True)
-
-    st.markdown("---")
-    st.subheader("Datos combinados")
-    st.dataframe(df_total)
-
-    st.write("Total de filas:", len(df_total))
-
+    return camaras
 
 # ============================================================
-# SIDEBAR — CARGA DE DATOS DE PROCESO
+# SIDEBAR — CARGA DE DATOS DE PROCESO (ÚNICA FUENTE)
 # ============================================================
 st.sidebar.header("Datos de proceso")
 
-uploaded_proceso = st.sidebar.file_uploader(
-    "Subir datos de proceso",
-    type=["csv", "xlsx", "xls", "zip"],
-    help="Archivo con variables de proceso (incluye columna temporal)"
+uploaded_file = st.sidebar.file_uploader(
+    "Subir archivo de datos",
+    type=["csv", "xlsx", "xls"],
+    help="CSV (1 cámara) o Excel con hojas tipo C0005A, C0005B..."
 )
 
-df_proceso = None
+if uploaded_file is not None:
+    nombre = uploaded_file.name.lower()
 
-if uploaded_proceso is not None:
-    df_proceso = None
+    # ---------------------------
+    # CASO CSV → UNA CÁMARA
+    # ---------------------------
+    if nombre.endswith(".csv"):
+        df = leer_datos_csv(uploaded_file)
 
-if uploaded_proceso is not None:
-    nombre = uploaded_proceso.name.lower()
+        if df is not None and not df.empty:
+            st.session_state.df_camaras_original = {"CSV": df.copy()}
+            st.session_state.df_camaras_activo = {"CSV": df.copy()}
+            st.session_state.df_camaras_eliminados = {
+                "CSV": pd.DataFrame(columns=df.columns)
+            }
 
-    # Caso Excel multicámara
-    if nombre.endswith((".xlsx", ".xls")):
-        df_camaras = leer_excel_multicamara(uploaded_proceso)
+            st.sidebar.success(
+                f"CSV cargado como una cámara ({df.shape[0]} filas)"
+            )
+        else:
+            st.sidebar.error("No se pudo leer el CSV")
+
+    # ---------------------------
+    # CASO EXCEL MULTICÁMARA
+    # ---------------------------
+    elif nombre.endswith((".xlsx", ".xls")):
+        df_camaras = leer_excel_multicamara(uploaded_file)
 
         if df_camaras:
-            st.session_state.df_camaras = df_camaras
+            st.session_state.df_camaras_original = {
+                k: v.copy() for k, v in df_camaras.items()
+            }
+            st.session_state.df_camaras_activo = {
+                k: v.copy() for k, v in df_camaras.items()
+            }
+            st.session_state.df_camaras_eliminados = {
+                k: pd.DataFrame(columns=v.columns)
+                for k, v in df_camaras.items()
+            }
+
             st.sidebar.success(
                 f"Cámaras detectadas: {', '.join(df_camaras.keys())}"
             )
         else:
-            st.sidebar.error("No se detectaron cámaras en las hojas del Excel")
-
-    # Caso CSV (una sola cámara)
-    elif nombre.endswith(".csv"):
-        df_proceso = leer_datos_proceso(uploaded_proceso)
-        if df_proceso is not None:
-            st.session_state.df_camaras = {"CSV": df_proceso}
-            st.sidebar.success("CSV cargado como una única cámara")
+            st.sidebar.error(
+                "El Excel no contiene hojas con patrón C000xA/B"
+            )
 
     else:
         st.sidebar.error("Formato no soportado")
 
-    if df_proceso is not None and not df_proceso.empty:
-        st.sidebar.success(
-            f"Datos cargados: {df_proceso.shape[0]} filas, {df_proceso.shape[1]} columnas"
-        )
-    else:
-        st.sidebar.error("No se pudieron cargar los datos")
 else:
-    st.sidebar.info("No hay datos de proceso cargados")
+    st.sidebar.info("No hay datos cargados")
+
 
 # ============================================================
 # PESTAÑAS OBLIGATORIAS (VACÍAS)
