@@ -179,11 +179,11 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     pass
 # ============================================================
-# PESTAÑA 2 — GRAFICADO CON EXCLUSIÓN MANUAL + FILTRADO
+# PESTAÑA 2 — GRAFICADO AVANZADO COMPLETO
 # ============================================================
 with tab2:
 
-    st.subheader("Graficado interactivo de variables de proceso")
+    st.subheader("Graficado interactivo avanzado de variables de proceso")
 
     if df_proceso is None or df_proceso.empty:
         st.warning("Cargue primero un archivo de datos de proceso.")
@@ -197,6 +197,12 @@ with tab2:
         if "df_eliminados_tab2" not in st.session_state:
             st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
 
+        if "axis_frozen_tab2" not in st.session_state:
+            st.session_state.axis_frozen_tab2 = False
+
+        if "axis_limits_tab2" not in st.session_state:
+            st.session_state.axis_limits_tab2 = {}
+
         df_activo = st.session_state.df_activo_tab2
         df_eliminados = st.session_state.df_eliminados_tab2
 
@@ -207,131 +213,162 @@ with tab2:
 
         if len(cols_num) < 2:
             st.error("Se necesitan al menos dos variables numéricas.")
-        else:
-            colx, coly, colr = st.columns([1, 2, 1])
+            st.stop()
 
-            with colx:
-                x_var = st.selectbox("Variable eje X", cols_num)
+        # --------------------------------------------------
+        # SELECCIÓN DE EJES
+        # --------------------------------------------------
+        colx, coly, colr = st.columns([1, 2, 1])
 
-            with coly:
-                y_vars = st.multiselect(
-                    "Variables eje Y",
-                    [c for c in cols_num if c != x_var],
-                    default=[c for c in cols_num if c != x_var][:1]
+        with colx:
+            x_var = st.selectbox("Variable eje X", cols_num)
+
+        with coly:
+            y_vars = st.multiselect(
+                "Variables eje Y",
+                [c for c in cols_num if c != x_var],
+                default=[c for c in cols_num if c != x_var][:1]
+            )
+
+        with colr:
+            if st.button("Restaurar todo"):
+                st.session_state.df_activo_tab2 = df_proceso.copy()
+                st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
+                st.session_state.axis_frozen_tab2 = False
+                st.session_state.axis_limits_tab2 = {}
+                st.rerun()
+
+        if not y_vars:
+            st.warning("Seleccione al menos una variable Y.")
+            st.stop()
+
+        # --------------------------------------------------
+        # FILTRO POR X (COMÚN)
+        # --------------------------------------------------
+        xmin, xmax = float(df_activo[x_var].min()), float(df_activo[x_var].max())
+
+        rx_min, rx_max = st.slider(
+            f"Rango para {x_var}",
+            xmin, xmax, (xmin, xmax)
+        )
+
+        df_x = df_activo[
+            (df_activo[x_var] >= rx_min) &
+            (df_activo[x_var] <= rx_max)
+        ]
+
+        # --------------------------------------------------
+        # GRÁFICO
+        # --------------------------------------------------
+        fig = go.Figure()
+        puntos_usados = set()
+
+        for y in y_vars:
+            ymin, ymax = float(df_activo[y].min()), float(df_activo[y].max())
+
+            ry_min, ry_max = st.slider(
+                f"Rango para {y}",
+                ymin, ymax, (ymin, ymax),
+                key=f"slider_{y}"
+            )
+
+            df_y = df_x[
+                (df_x[y] >= ry_min) &
+                (df_x[y] <= ry_max)
+            ]
+
+            puntos_usados.update(df_y.index.tolist())
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df_y[x_var],
+                    y=df_y[y],
+                    mode="markers",
+                    name=y,
+                    customdata=df_y.index
                 )
+            )
 
-            with colr:
-                if st.button("Restaurar eliminaciones"):
-                    st.session_state.df_activo_tab2 = df_proceso.copy()
-                    st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
-                    st.rerun()
+            # Regresión independiente
+            if len(df_y) >= 2:
+                x = df_y[x_var].values
+                yy = df_y[y].values
 
-            if not y_vars:
-                st.warning("Seleccione al menos una variable en Y.")
-            else:
-                # --------------------------------------------------
-                # FILTRADO POR SLIDERS (REDEFINE DATOS VISIBLES)
-                # --------------------------------------------------
-                st.markdown("Filtrado por rangos (redefine los datos mostrados)")
+                m, b = np.polyfit(x, yy, 1)
+                x_line = np.linspace(x.min(), x.max(), 100)
+                y_line = m * x_line + b
 
-                df_filtrado = df_activo.copy()
+                ss_res = ((yy - (m * x + b)) ** 2).sum()
+                ss_tot = ((yy - yy.mean()) ** 2).sum()
+                r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
 
-                for col in [x_var] + y_vars:
-                    vmin = float(df_activo[col].min())
-                    vmax = float(df_activo[col].max())
-
-                    rmin, rmax = st.slider(
-                        col,
-                        min_value=vmin,
-                        max_value=vmax,
-                        value=(vmin, vmax),
-                        key=f"slider_{col}"
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_line,
+                        y=y_line,
+                        mode="lines",
+                        name=f"{y} (R²={r2:.3f})"
                     )
-
-                    df_filtrado = df_filtrado[
-                        (df_filtrado[col] >= rmin) &
-                        (df_filtrado[col] <= rmax)
-                    ]
-
-                # --------------------------------------------------
-                # GRÁFICO (EJES SE REAJUSTAN AL FILTRADO)
-                # --------------------------------------------------
-                fig = go.Figure()
-
-                for y in y_vars:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=df_filtrado[x_var],
-                            y=df_filtrado[y],
-                            mode="markers",
-                            name=y,
-                            customdata=df_filtrado.index
-                        )
-                    )
-
-                    # Regresión por cada Y
-                    df_reg = df_filtrado[[x_var, y]].dropna()
-                    if len(df_reg) >= 2:
-                        x = df_reg[x_var].values
-                        yy = df_reg[y].values
-
-                        m, b = np.polyfit(x, yy, 1)
-                        x_line = np.linspace(x.min(), x.max(), 100)
-                        y_line = m * x_line + b
-
-                        ss_res = ((yy - (m * x + b)) ** 2).sum()
-                        ss_tot = ((yy - yy.mean()) ** 2).sum()
-                        r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
-
-                        fig.add_trace(
-                            go.Scatter(
-                                x=x_line,
-                                y=y_line,
-                                mode="lines",
-                                name=f"{y} (R²={r2:.3f})"
-                            )
-                        )
-
-                fig.update_layout(
-                    height=550,
-                    xaxis_title=x_var,
-                    yaxis_title="Variables"
                 )
 
-                event = st.plotly_chart(
-                    fig,
-                    use_container_width=True,
-                    on_select="rerun"
+        fig.update_layout(
+            height=550,
+            xaxis_title=x_var,
+            yaxis_title="Variables"
+        )
+
+        # --------------------------------------------------
+        # CONGELAR EJES TRAS PRIMER RENDER
+        # --------------------------------------------------
+        if st.session_state.axis_frozen_tab2:
+            fig.update_layout(
+                xaxis=dict(
+                    range=st.session_state.axis_limits_tab2["x"],
+                    autorange=False
+                ),
+                yaxis=dict(
+                    range=st.session_state.axis_limits_tab2["y"],
+                    autorange=False
+                )
+            )
+
+        event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+        if not st.session_state.axis_frozen_tab2:
+            st.session_state.axis_limits_tab2 = {
+                "x": fig.layout.xaxis.range,
+                "y": fig.layout.yaxis.range
+            }
+            st.session_state.axis_frozen_tab2 = True
+
+        # --------------------------------------------------
+        # EXCLUSIÓN DESDE GRÁFICO
+        # --------------------------------------------------
+        if event and event.selection and event.selection.points:
+            indices = list(set(p["customdata"] for p in event.selection.points))
+
+            if st.button("Excluir puntos seleccionados del gráfico"):
+                puntos = df_activo.loc[indices]
+
+                st.session_state.df_eliminados_tab2 = pd.concat(
+                    [df_eliminados, puntos],
+                    ignore_index=True
                 )
 
-                # --------------------------------------------------
-                # EXCLUSIÓN MANUAL DESDE GRÁFICO
-                # --------------------------------------------------
-                if event and event.selection and event.selection.points:
-                    indices = list(set(p["customdata"] for p in event.selection.points))
-
-                    if st.button("Eliminar puntos seleccionados"):
-                        puntos = df_activo.loc[indices]
-
-                        st.session_state.df_eliminados_tab2 = pd.concat(
-                            [df_eliminados, puntos],
-                            ignore_index=True
-                        )
-
-                        st.session_state.df_activo_tab2 = (
-                            df_activo.drop(indices)
-                            .reset_index(drop=True)
-                        )
-                        st.rerun()
+                st.session_state.df_activo_tab2 = (
+                    df_activo.drop(indices)
+                    .reset_index(drop=True)
+                )
+                st.rerun()
 
         # --------------------------------------------------
         # EXCLUSIÓN MANUAL POR TABLA
         # --------------------------------------------------
         st.markdown("---")
-        st.subheader("Eliminar puntos manualmente desde tabla")
+        st.subheader("Excluir puntos manualmente")
 
         df_tabla = df_activo.copy()
-        df_tabla["Eliminar"] = False
+        df_tabla["Excluir"] = False
 
         with st.form("form_exclusion_tab2"):
             df_editado = st.data_editor(
@@ -339,10 +376,10 @@ with tab2:
                 num_rows="fixed",
                 use_container_width=True
             )
-            submit = st.form_submit_button("Eliminar filas marcadas")
+            submit = st.form_submit_button("Excluir filas marcadas")
 
         if submit:
-            filas = df_editado[df_editado["Eliminar"]].index.tolist()
+            filas = df_editado[df_editado["Excluir"]].index.tolist()
 
             if filas:
                 puntos = df_activo.loc[filas]
@@ -359,13 +396,13 @@ with tab2:
                 st.rerun()
 
         # --------------------------------------------------
-        # TABLA DE ELIMINADOS
+        # TABLA DE EXCLUIDOS
         # --------------------------------------------------
         st.markdown("---")
-        st.subheader("Puntos eliminados manualmente")
+        st.subheader("Puntos excluidos del análisis")
 
         if st.session_state.df_eliminados_tab2.empty:
-            st.info("No hay puntos eliminados.")
+            st.info("No hay puntos excluidos.")
         else:
             st.dataframe(
                 st.session_state.df_eliminados_tab2,
