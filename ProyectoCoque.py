@@ -137,25 +137,56 @@ def leer_datos_proceso(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Error leyendo archivo: {e}")
         return None
-def leer_excel_multicamara(uploaded_file):
+
+st.subheader("Carga de múltiples archivos Excel")
+
+uploaded_files = st.file_uploader(
+    "Sube uno o varios archivos Excel",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True
+)
+
+def extraer_codigo_archivo(nombre):
     """
-    Lee un Excel con múltiples hojas y asigna cada hoja a una cámara
-    detectando patrones tipo C0005A, C0005B, C0004A, etc.
-    Devuelve un diccionario: {camara: DataFrame}
+    Extrae códigos tipo C0004A de un nombre de archivo.
     """
-    xls = pd.ExcelFile(uploaded_file)
-    camaras = {}
+    match = re.search(r"C\d{4}[A-Z]", nombre)
+    return match.group(0) if match else "SIN_CODIGO"
 
-    patron = re.compile(r"C\d{4}[A-Z]")
+if uploaded_files:
+    dataframes = []
 
-    for hoja in xls.sheet_names:
-        match = patron.search(hoja.upper())
-        if match:
-            camara = match.group()
-            df = pd.read_excel(xls, sheet_name=hoja)
-            camaras[camara] = df
+    for file in uploaded_files:
+        st.markdown(f"### Archivo: {file.name}")
 
-    return camaras
+        codigo = extraer_codigo_archivo(file.name)
+        st.write("Código detectado:", codigo)
+
+        # Leer todas las hojas
+        hojas = pd.read_excel(file, sheet_name=None)
+
+        hoja_sel = st.selectbox(
+            f"Selecciona hoja de {file.name}",
+            hojas.keys(),
+            key=file.name
+        )
+
+        df = hojas[hoja_sel].copy()
+        df["__archivo__"] = file.name
+        df["__codigo__"] = codigo
+        df["__hoja__"] = hoja_sel
+
+        dataframes.append(df)
+
+    # Combinar todos los archivos
+    df_total = pd.concat(dataframes, ignore_index=True)
+
+    st.markdown("---")
+    st.subheader("Datos combinados")
+    st.dataframe(df_total)
+
+    st.write("Total de filas:", len(df_total))
+
 
 # ============================================================
 # SIDEBAR — CARGA DE DATOS DE PROCESO
