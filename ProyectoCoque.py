@@ -114,89 +114,85 @@ def leer_datos_csv(uploaded_file):
         return None
 
 
-def leer_excel_multicamara(uploaded_file):
+def extraer_codigo_camara(nombre_archivo):
     """
-    Lee un Excel con múltiples hojas.
-    Cada hoja que contenga C0005A, C0005B, etc. se interpreta como cámara.
+    Extrae códigos tipo C0004A, C0005B, etc. del nombre del archivo.
     """
-    xls = pd.ExcelFile(uploaded_file)
-    camaras = {}
-
-    patron = re.compile(r"C\d{4}[A-Z]")
-
-    for hoja in xls.sheet_names:
-        match = patron.search(hoja.upper())
-        if match:
-            camara = match.group()
-            df = pd.read_excel(xls, sheet_name=hoja)
-            camaras[camara] = df
-
-    return camaras
+    match = re.search(r"C\d{4}[A-Z]", nombre_archivo.upper())
+    return match.group(0) if match else None
 
 # ============================================================
-# SIDEBAR — CARGA DE DATOS DE PROCESO (ÚNICA FUENTE)
+# SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
 # ============================================================
 st.sidebar.header("Datos de proceso")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Subir archivo de datos",
-    type=["csv", "xlsx", "xls"],
-    help="CSV (1 cámara) o Excel con hojas tipo C0005A, C0005B..."
+uploaded_files = st.sidebar.file_uploader(
+    "Subir archivos Excel de proceso",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+    help="Cada archivo debe contener un código C000xA/B en el nombre"
 )
 
-if uploaded_file is not None:
-    nombre = uploaded_file.name.lower()
+# Inicializar estados UNA SOLA VEZ
+if "df_camaras_original" not in st.session_state:
+    st.session_state.df_camaras_original = {}
 
-    # ---------------------------
-    # CASO CSV → UNA CÁMARA
-    # ---------------------------
-    if nombre.endswith(".csv"):
-        df = leer_datos_csv(uploaded_file)
+if "df_camaras_activo" not in st.session_state:
+    st.session_state.df_camaras_activo = {}
 
-        if df is not None and not df.empty:
-            st.session_state.df_camaras_original = {"CSV": df.copy()}
-            st.session_state.df_camaras_activo = {"CSV": df.copy()}
-            st.session_state.df_camaras_eliminados = {
-                "CSV": pd.DataFrame(columns=df.columns)
-            }
+if "df_camaras_eliminados" not in st.session_state:
+    st.session_state.df_camaras_eliminados = {}
+
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        nombre = uploaded_file.name
+
+        camara = extraer_codigo_camara(nombre)
+
+        if camara is None:
+            st.sidebar.warning(
+                f"No se detectó cámara en {nombre} (se ignora)"
+            )
+            continue
+
+        # Evitar cargar dos veces la misma cámara
+        if camara in st.session_state.df_camaras_original:
+            st.sidebar.info(
+                f"La cámara {camara} ya está cargada (se omite)"
+            )
+            continue
+
+        try:
+            df = pd.read_excel(uploaded_file)
+
+            if df is None or df.empty:
+                st.sidebar.warning(
+                    f"{nombre} está vacío (se ignora)"
+                )
+                continue
+
+            # Guardar estados
+            st.session_state.df_camaras_original[camara] = df.copy()
+            st.session_state.df_camaras_activo[camara] = df.copy()
+            st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(
+                columns=df.columns
+            )
 
             st.sidebar.success(
-                f"CSV cargado como una cámara ({df.shape[0]} filas)"
+                f"Cargado {nombre}\nCámara detectada: {camara}"
             )
-        else:
-            st.sidebar.error("No se pudo leer el CSV")
 
-    # ---------------------------
-    # CASO EXCEL MULTICÁMARA
-    # ---------------------------
-    elif nombre.endswith((".xlsx", ".xls")):
-        df_camaras = leer_excel_multicamara(uploaded_file)
-
-        if df_camaras:
-            st.session_state.df_camaras_original = {
-                k: v.copy() for k, v in df_camaras.items()
-            }
-            st.session_state.df_camaras_activo = {
-                k: v.copy() for k, v in df_camaras.items()
-            }
-            st.session_state.df_camaras_eliminados = {
-                k: pd.DataFrame(columns=v.columns)
-                for k, v in df_camaras.items()
-            }
-
-            st.sidebar.success(
-                f"Cámaras detectadas: {', '.join(df_camaras.keys())}"
-            )
-        else:
+        except Exception as e:
             st.sidebar.error(
-                "El Excel no contiene hojas con patrón C000xA/B"
+                f"Error leyendo {nombre}: {e}"
             )
 
-    else:
-        st.sidebar.error("Formato no soportado")
-
+if not st.session_state.df_camaras_original:
+    st.sidebar.info("No hay cámaras cargadas todavía")
 else:
-    st.sidebar.info("No hay datos cargados")
+    st.sidebar.markdown("### Cámaras cargadas")
+    for cam in st.session_state.df_camaras_original:
+        st.sidebar.write(f"- {cam}")
 
 
 # ============================================================
