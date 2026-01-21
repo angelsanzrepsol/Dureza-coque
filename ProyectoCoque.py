@@ -178,9 +178,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # ============================================================
 with tab1:
     pass
-
 # ============================================================
-# PESTAÑA 2 — GRAFICADO AVANZADO CON TODO + EJES FIJOS
+# PESTAÑA 2 — GRAFICADO AVANZADO CON CONGELACIÓN DE EJES
 # ============================================================
 with tab2:
 
@@ -198,26 +197,14 @@ with tab2:
         if "df_eliminados_tab2" not in st.session_state:
             st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
 
-        # --------------------------------------------------
-        # LÍMITES GLOBALES DE EJES (UNA SOLA VEZ)
-        # --------------------------------------------------
-        if "axis_limits_tab2" not in st.session_state:
-            numeric = df_proceso.select_dtypes(include="number")
+        if "axis_frozen_tab2" not in st.session_state:
+            st.session_state.axis_frozen_tab2 = False
 
-            st.session_state.axis_limits_tab2 = {
-                "x": {
-                    col: (float(numeric[col].min()), float(numeric[col].max()))
-                    for col in numeric.columns
-                },
-                "y_global": (
-                    float(numeric.min().min()),
-                    float(numeric.max().max())
-                )
-            }
+        if "axis_limits_tab2" not in st.session_state:
+            st.session_state.axis_limits_tab2 = {}
 
         df_activo = st.session_state.df_activo_tab2
         df_eliminados = st.session_state.df_eliminados_tab2
-        axis_limits = st.session_state.axis_limits_tab2
 
         # --------------------------------------------------
         # VARIABLES NUMÉRICAS
@@ -243,6 +230,8 @@ with tab2:
                 if st.button("Restaurar todo"):
                     st.session_state.df_activo_tab2 = df_proceso.copy()
                     st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
+                    st.session_state.axis_frozen_tab2 = False
+                    st.session_state.axis_limits_tab2 = {}
                     st.rerun()
 
             if not y_vars:
@@ -251,12 +240,13 @@ with tab2:
                 # --------------------------------------------------
                 # FILTRADO REAL POR SLIDERS (ELIMINA FILAS)
                 # --------------------------------------------------
-                st.markdown("Filtros por rango (eliminan valores, no ajustan ejes)")
+                st.markdown("Filtros por rango (eliminan datos, no ajustan ejes)")
 
                 df_filtrado = df_activo.copy()
 
                 for col in [x_var] + y_vars:
-                    vmin, vmax = axis_limits["x"][col]
+                    vmin = float(df_activo[col].min())
+                    vmax = float(df_activo[col].max())
 
                     rmin, rmax = st.slider(
                         col,
@@ -272,7 +262,7 @@ with tab2:
                     ]
 
                 # --------------------------------------------------
-                # GRÁFICO MULTIVARIABLE CON EJES FIJOS
+                # GRÁFICO (AUTOESCALA SOLO LA PRIMERA VEZ)
                 # --------------------------------------------------
                 fig = go.Figure()
 
@@ -312,18 +302,33 @@ with tab2:
                 fig.update_layout(
                     height=550,
                     xaxis_title=x_var,
-                    yaxis_title="Variables",
-                    xaxis=dict(
-                        range=axis_limits["x"][x_var],
-                        autorange=False
-                    ),
-                    yaxis=dict(
-                        range=axis_limits["y_global"],
-                        autorange=False
-                    )
+                    yaxis_title="Variables"
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                # --------------------------------------------------
+                # CONGELAR EJES TRAS EL PRIMER AUTOAJUSTE
+                # --------------------------------------------------
+                if st.session_state.axis_frozen_tab2:
+                    fig.update_layout(
+                        xaxis=dict(
+                            range=st.session_state.axis_limits_tab2["x"],
+                            autorange=False
+                        ),
+                        yaxis=dict(
+                            range=st.session_state.axis_limits_tab2["y"],
+                            autorange=False
+                        )
+                    )
+
+                chart = st.plotly_chart(fig, use_container_width=True)
+
+                # Guardar límites SOLO una vez
+                if not st.session_state.axis_frozen_tab2:
+                    st.session_state.axis_limits_tab2 = {
+                        "x": fig.layout.xaxis.range,
+                        "y": fig.layout.yaxis.range
+                    }
+                    st.session_state.axis_frozen_tab2 = True
 
         # --------------------------------------------------
         # EXCLUSIÓN MANUAL POR TABLA
@@ -335,7 +340,11 @@ with tab2:
         df_tabla["Excluir"] = False
 
         with st.form("form_exclusion_tab2"):
-            df_editado = st.data_editor(df_tabla, num_rows="fixed", use_container_width=True)
+            df_editado = st.data_editor(
+                df_tabla,
+                num_rows="fixed",
+                use_container_width=True
+            )
             submit = st.form_submit_button("Excluir filas marcadas")
 
         if submit:
@@ -364,7 +373,10 @@ with tab2:
         if st.session_state.df_eliminados_tab2.empty:
             st.info("No hay puntos excluidos.")
         else:
-            st.dataframe(st.session_state.df_eliminados_tab2, use_container_width=True)
+            st.dataframe(
+                st.session_state.df_eliminados_tab2,
+                use_container_width=True
+            )
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
