@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import re
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -136,6 +137,25 @@ def leer_datos_proceso(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Error leyendo archivo: {e}")
         return None
+def leer_excel_multicamara(uploaded_file):
+    """
+    Lee un Excel con múltiples hojas y asigna cada hoja a una cámara
+    detectando patrones tipo C0005A, C0005B, C0004A, etc.
+    Devuelve un diccionario: {camara: DataFrame}
+    """
+    xls = pd.ExcelFile(uploaded_file)
+    camaras = {}
+
+    patron = re.compile(r"C\d{4}[A-Z]")
+
+    for hoja in xls.sheet_names:
+        match = patron.search(hoja.upper())
+        if match:
+            camara = match.group()
+            df = pd.read_excel(xls, sheet_name=hoja)
+            camaras[camara] = df
+
+    return camaras
 
 # ============================================================
 # SIDEBAR — CARGA DE DATOS DE PROCESO
@@ -151,7 +171,32 @@ uploaded_proceso = st.sidebar.file_uploader(
 df_proceso = None
 
 if uploaded_proceso is not None:
-    df_proceso = leer_datos_proceso(uploaded_proceso)
+    df_proceso = None
+
+if uploaded_proceso is not None:
+    nombre = uploaded_proceso.name.lower()
+
+    # Caso Excel multicámara
+    if nombre.endswith((".xlsx", ".xls")):
+        df_camaras = leer_excel_multicamara(uploaded_proceso)
+
+        if df_camaras:
+            st.session_state.df_camaras = df_camaras
+            st.sidebar.success(
+                f"Cámaras detectadas: {', '.join(df_camaras.keys())}"
+            )
+        else:
+            st.sidebar.error("No se detectaron cámaras en las hojas del Excel")
+
+    # Caso CSV (una sola cámara)
+    elif nombre.endswith(".csv"):
+        df_proceso = leer_datos_proceso(uploaded_proceso)
+        if df_proceso is not None:
+            st.session_state.df_camaras = {"CSV": df_proceso}
+            st.sidebar.success("CSV cargado como una única cámara")
+
+    else:
+        st.sidebar.error("Formato no soportado")
 
     if df_proceso is not None and not df_proceso.empty:
         st.sidebar.success(
@@ -179,113 +224,133 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     pass
 # ============================================================
-# PESTAÑA 2 — GRAFICADO AVANZADO COMPLETO
+# PESTAÑA 2 — GRAFICADO AVANZADO MULTICÁMARA (COMPLETO)
 # ============================================================
 with tab2:
 
     st.subheader("Graficado interactivo avanzado de variables de proceso")
 
-    if df_proceso is None or df_proceso.empty:
-        st.warning("Cargue primero un archivo de datos de proceso.")
-    else:
-        # --------------------------------------------------
-        # ESTADOS
-        # --------------------------------------------------
-        if "df_activo_tab2" not in st.session_state:
-            st.session_state.df_activo_tab2 = df_proceso.copy()
+    # --------------------------------------------------
+    # COMPROBACIÓN DE DATOS
+    # --------------------------------------------------
+    if "df_camaras_activo" not in st.session_state:
+        st.warning("Cargue primero un Excel con cámaras.")
+        st.stop()
 
-        if "df_eliminados_tab2" not in st.session_state:
-            st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
+    df_camaras_activo = st.session_state.df_camaras_activo
+    df_camaras_eliminados = st.session_state.df_camaras_eliminados
+    df_camaras_original = st.session_state.df_camaras_original
 
-        if "axis_frozen_tab2" not in st.session_state:
-            st.session_state.axis_frozen_tab2 = False
+    camaras_disponibles = sorted(df_camaras_activo.keys())
 
-        if "axis_limits_tab2" not in st.session_state:
-            st.session_state.axis_limits_tab2 = {}
+    # --------------------------------------------------
+    # SELECCIÓN DE CÁMARAS
+    # --------------------------------------------------
+    camaras_sel = st.multiselect(
+        "Cámaras a representar",
+        camaras_disponibles,
+        default=camaras_disponibles[:1]
+    )
 
-        df_activo = st.session_state.df_activo_tab2
-        df_eliminados = st.session_state.df_eliminados_tab2
+    if not camaras_sel:
+        st.warning("Seleccione al menos una cámara.")
+        st.stop()
 
-        # --------------------------------------------------
-        # VARIABLES NUMÉRICAS
-        # --------------------------------------------------
-        cols_num = df_activo.select_dtypes(include="number").columns.tolist()
+    # --------------------------------------------------
+    # VARIABLES NUMÉRICAS (referencia primera cámara)
+    # --------------------------------------------------
+    df_ref = df_camaras_activo[camaras_sel[0]]
+    cols_num = df_ref.select_dtypes(include="number").columns.tolist()
 
-        if len(cols_num) < 2:
-            st.error("Se necesitan al menos dos variables numéricas.")
-            st.stop()
+    if len(cols_num) < 2:
+        st.error("Se necesitan al menos dos columnas numéricas.")
+        st.stop()
 
-        # --------------------------------------------------
-        # SELECCIÓN DE EJES
-        # --------------------------------------------------
-        colx, coly, colr = st.columns([1, 2, 1])
+    colx, coly, colr = st.columns([1, 2, 1])
 
-        with colx:
-            x_var = st.selectbox("Variable eje X", cols_num)
+    with colx:
+        x_var = st.selectbox("Variable eje X", cols_num)
 
-        with coly:
-            y_vars = st.multiselect(
-                "Variables eje Y",
-                [c for c in cols_num if c != x_var],
-                default=[c for c in cols_num if c != x_var][:1]
-            )
-
-        with colr:
-            if st.button("Restaurar todo"):
-                st.session_state.df_activo_tab2 = df_proceso.copy()
-                st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
-                st.session_state.axis_frozen_tab2 = False
-                st.session_state.axis_limits_tab2 = {}
-                st.rerun()
-
-        if not y_vars:
-            st.warning("Seleccione al menos una variable Y.")
-            st.stop()
-
-        # --------------------------------------------------
-        # FILTRO POR X (COMÚN)
-        # --------------------------------------------------
-        xmin, xmax = float(df_activo[x_var].min()), float(df_activo[x_var].max())
-
-        rx_min, rx_max = st.slider(
-            f"Rango para {x_var}",
-            xmin, xmax, (xmin, xmax)
+    with coly:
+        y_vars = st.multiselect(
+            "Variables eje Y",
+            [c for c in cols_num if c != x_var],
+            default=[c for c in cols_num if c != x_var][:1]
         )
 
-        df_x = df_activo[
-            (df_activo[x_var] >= rx_min) &
-            (df_activo[x_var] <= rx_max)
+    with colr:
+        if st.button("Restaurar todo"):
+            st.session_state.df_camaras_activo = {
+                k: v.copy() for k, v in df_camaras_original.items()
+            }
+            st.session_state.df_camaras_eliminados = {
+                k: pd.DataFrame(columns=v.columns)
+                for k, v in df_camaras_original.items()
+            }
+            st.session_state.axis_frozen_tab2 = False
+            st.session_state.axis_limits_tab2 = {}
+            st.rerun()
+
+    if not y_vars:
+        st.warning("Seleccione al menos una variable Y.")
+        st.stop()
+
+    # --------------------------------------------------
+    # FILTRO POR X (COMÚN)
+    # --------------------------------------------------
+    xmin = min(df_camaras_activo[c][x_var].min() for c in camaras_sel)
+    xmax = max(df_camaras_activo[c][x_var].max() for c in camaras_sel)
+
+    rx_min, rx_max = st.slider(
+        f"Rango para {x_var}",
+        float(xmin), float(xmax),
+        (float(xmin), float(xmax))
+    )
+
+    # --------------------------------------------------
+    # ESTADO DE EJES
+    # --------------------------------------------------
+    if "axis_frozen_tab2" not in st.session_state:
+        st.session_state.axis_frozen_tab2 = False
+
+    if "axis_limits_tab2" not in st.session_state:
+        st.session_state.axis_limits_tab2 = {}
+
+    # --------------------------------------------------
+    # GRÁFICO
+    # --------------------------------------------------
+    fig = go.Figure()
+
+    puntos_seleccionables = {}
+
+    for camara in camaras_sel:
+        df_cam = df_camaras_activo[camara]
+        df_cam = df_cam[
+            (df_cam[x_var] >= rx_min) &
+            (df_cam[x_var] <= rx_max)
         ]
 
-        # --------------------------------------------------
-        # GRÁFICO
-        # --------------------------------------------------
-        fig = go.Figure()
-        puntos_usados = set()
-
         for y in y_vars:
-            ymin, ymax = float(df_activo[y].min()), float(df_activo[y].max())
+            ymin, ymax = float(df_cam[y].min()), float(df_cam[y].max())
 
             ry_min, ry_max = st.slider(
-                f"Rango para {y}",
+                f"{camara} – rango {y}",
                 ymin, ymax, (ymin, ymax),
-                key=f"slider_{y}"
+                key=f"{camara}_{y}"
             )
 
-            df_y = df_x[
-                (df_x[y] >= ry_min) &
-                (df_x[y] <= ry_max)
+            df_y = df_cam[
+                (df_cam[y] >= ry_min) &
+                (df_cam[y] <= ry_max)
             ]
-
-            puntos_usados.update(df_y.index.tolist())
 
             fig.add_trace(
                 go.Scatter(
                     x=df_y[x_var],
                     y=df_y[y],
                     mode="markers",
-                    name=y,
-                    customdata=df_y.index
+                    name=f"{camara} – {y}",
+                    customdata=[(camara, i) for i in df_y.index]
                 )
             )
 
@@ -307,70 +372,77 @@ with tab2:
                         x=x_line,
                         y=y_line,
                         mode="lines",
-                        name=f"{y} (R²={r2:.3f})"
+                        name=f"{camara} – {y} (R²={r2:.3f})"
                     )
                 )
 
+    fig.update_layout(
+        height=600,
+        xaxis_title=x_var,
+        yaxis_title="Variables",
+        legend_title="Cámara / Variable"
+    )
+
+    # --------------------------------------------------
+    # CONGELAR EJES TRAS PRIMER AUTOAJUSTE
+    # --------------------------------------------------
+    if st.session_state.axis_frozen_tab2:
         fig.update_layout(
-            height=550,
-            xaxis_title=x_var,
-            yaxis_title="Variables"
+            xaxis=dict(
+                range=st.session_state.axis_limits_tab2["x"],
+                autorange=False
+            ),
+            yaxis=dict(
+                range=st.session_state.axis_limits_tab2["y"],
+                autorange=False
+            )
         )
 
-        # --------------------------------------------------
-        # CONGELAR EJES TRAS PRIMER RENDER
-        # --------------------------------------------------
-        if st.session_state.axis_frozen_tab2:
-            fig.update_layout(
-                xaxis=dict(
-                    range=st.session_state.axis_limits_tab2["x"],
-                    autorange=False
-                ),
-                yaxis=dict(
-                    range=st.session_state.axis_limits_tab2["y"],
-                    autorange=False
-                )
-            )
+    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
-        event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+    if not st.session_state.axis_frozen_tab2:
+        st.session_state.axis_limits_tab2 = {
+            "x": fig.layout.xaxis.range,
+            "y": fig.layout.yaxis.range
+        }
+        st.session_state.axis_frozen_tab2 = True
 
-        if not st.session_state.axis_frozen_tab2:
-            st.session_state.axis_limits_tab2 = {
-                "x": fig.layout.xaxis.range,
-                "y": fig.layout.yaxis.range
-            }
-            st.session_state.axis_frozen_tab2 = True
+    # --------------------------------------------------
+    # EXCLUSIÓN DESDE GRÁFICO
+    # --------------------------------------------------
+    if event and event.selection and event.selection.points:
+        seleccion = event.selection.points
 
-        # --------------------------------------------------
-        # EXCLUSIÓN DESDE GRÁFICO
-        # --------------------------------------------------
-        if event and event.selection and event.selection.points:
-            indices = list(set(p["customdata"] for p in event.selection.points))
+        if st.button("Excluir puntos seleccionados del gráfico"):
+            for p in seleccion:
+                camara, idx = p["customdata"]
+                df_cam = df_camaras_activo[camara]
 
-            if st.button("Excluir puntos seleccionados del gráfico"):
-                puntos = df_activo.loc[indices]
+                if idx in df_cam.index:
+                    fila = df_cam.loc[[idx]]
 
-                st.session_state.df_eliminados_tab2 = pd.concat(
-                    [df_eliminados, puntos],
-                    ignore_index=True
-                )
+                    df_camaras_eliminados[camara] = pd.concat(
+                        [df_camaras_eliminados[camara], fila],
+                        ignore_index=True
+                    )
 
-                st.session_state.df_activo_tab2 = (
-                    df_activo.drop(indices)
-                    .reset_index(drop=True)
-                )
-                st.rerun()
+                    df_camaras_activo[camara] = df_cam.drop(idx)
 
-        # --------------------------------------------------
-        # EXCLUSIÓN MANUAL POR TABLA
-        # --------------------------------------------------
-        st.markdown("---")
-        st.subheader("Excluir puntos manualmente")
+            st.rerun()
 
-        df_tabla = df_activo.copy()
+    # --------------------------------------------------
+    # EXCLUSIÓN MANUAL POR TABLA (POR CÁMARA)
+    # --------------------------------------------------
+    st.markdown("---")
+    st.subheader("Excluir puntos manualmente por cámara")
+
+    for camara in camaras_sel:
+        st.markdown(f"**Cámara {camara}**")
+
+        df_tabla = df_camaras_activo[camara].copy()
         df_tabla["Excluir"] = False
 
-        with st.form("form_exclusion_tab2"):
+        with st.form(f"form_exclusion_{camara}"):
             df_editado = st.data_editor(
                 df_tabla,
                 num_rows="fixed",
@@ -382,32 +454,37 @@ with tab2:
             filas = df_editado[df_editado["Excluir"]].index.tolist()
 
             if filas:
-                puntos = df_activo.loc[filas]
+                puntos = df_camaras_activo[camara].loc[filas]
 
-                st.session_state.df_eliminados_tab2 = pd.concat(
-                    [df_eliminados, puntos],
+                df_camaras_eliminados[camara] = pd.concat(
+                    [df_camaras_eliminados[camara], puntos],
                     ignore_index=True
                 )
 
-                st.session_state.df_activo_tab2 = (
-                    df_activo.drop(filas)
-                    .reset_index(drop=True)
+                df_camaras_activo[camara] = (
+                    df_camaras_activo[camara].drop(filas)
                 )
                 st.rerun()
 
-        # --------------------------------------------------
-        # TABLA DE EXCLUIDOS
-        # --------------------------------------------------
-        st.markdown("---")
-        st.subheader("Puntos excluidos del análisis")
+    # --------------------------------------------------
+    # TABLA DE EXCLUIDOS
+    # --------------------------------------------------
+    st.markdown("---")
+    st.subheader("Puntos excluidos del análisis")
 
-        if st.session_state.df_eliminados_tab2.empty:
-            st.info("No hay puntos excluidos.")
-        else:
-            st.dataframe(
-                st.session_state.df_eliminados_tab2,
-                use_container_width=True
-            )
+    df_excluidos_total = pd.concat(
+        [
+            df.assign(Camara=cam)
+            for cam, df in df_camaras_eliminados.items()
+            if not df.empty
+        ],
+        ignore_index=True
+    ) if any(not df.empty for df in df_camaras_eliminados.values()) else pd.DataFrame()
+
+    if df_excluidos_total.empty:
+        st.info("No hay puntos excluidos.")
+    else:
+        st.dataframe(df_excluidos_total, use_container_width=True)
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
