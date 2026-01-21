@@ -212,7 +212,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     pass
 # ============================================================
-# PESTAÑA 2 — GRAFICADO AVANZADO MULTICÁMARA (COMPLETO)
+# PESTAÑA 2 — GRAFICADO AVANZADO MULTICÁMARA (Y INDEPENDIENTE)
 # ============================================================
 with tab2:
 
@@ -222,7 +222,7 @@ with tab2:
     # COMPROBACIÓN DE DATOS
     # --------------------------------------------------
     if "df_camaras_activo" not in st.session_state:
-        st.warning("Cargue primero un Excel con cámaras.")
+        st.warning("Cargue primero datos de cámaras.")
         st.stop()
 
     df_camaras_activo = st.session_state.df_camaras_activo
@@ -245,43 +245,56 @@ with tab2:
         st.stop()
 
     # --------------------------------------------------
-    # VARIABLES NUMÉRICAS (referencia primera cámara)
+    # VARIABLE X (COMÚN)
     # --------------------------------------------------
     df_ref = df_camaras_activo[camaras_sel[0]]
     cols_num = df_ref.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 2:
-        st.error("Se necesitan al menos dos columnas numéricas.")
+        st.error("Se necesitan columnas numéricas.")
         st.stop()
 
-    colx, coly, colr = st.columns([1, 2, 1])
+    x_var = st.selectbox("Variable eje X (común)", cols_num)
 
-    with colx:
-        x_var = st.selectbox("Variable eje X", cols_num)
+    # --------------------------------------------------
+    # SELECCIÓN DE Y POR CÁMARA
+    # --------------------------------------------------
+    st.markdown("### Selección de variables Y por cámara")
 
-    with coly:
-        y_vars = st.multiselect(
-            "Variables eje Y",
-            [c for c in cols_num if c != x_var],
-            default=[c for c in cols_num if c != x_var][:1]
+    y_vars_por_camara = {}
+
+    for camara in camaras_sel:
+        df_cam = df_camaras_activo[camara]
+        cols_cam = df_cam.select_dtypes(include="number").columns.tolist()
+
+        y_sel = st.multiselect(
+            f"Variables Y para cámara {camara}",
+            [c for c in cols_cam if c != x_var],
+            default=[c for c in cols_cam if c != x_var][:1],
+            key=f"y_sel_{camara}"
         )
 
-    with colr:
-        if st.button("Restaurar todo"):
-            st.session_state.df_camaras_activo = {
-                k: v.copy() for k, v in df_camaras_original.items()
-            }
-            st.session_state.df_camaras_eliminados = {
-                k: pd.DataFrame(columns=v.columns)
-                for k, v in df_camaras_original.items()
-            }
-            st.session_state.axis_frozen_tab2 = False
-            st.session_state.axis_limits_tab2 = {}
-            st.rerun()
+        if y_sel:
+            y_vars_por_camara[camara] = y_sel
 
-    if not y_vars:
-        st.warning("Seleccione al menos una variable Y.")
+    if not y_vars_por_camara:
+        st.warning("Seleccione al menos una variable Y en alguna cámara.")
         st.stop()
+
+    # --------------------------------------------------
+    # BOTÓN RESTAURAR
+    # --------------------------------------------------
+    if st.button("Restaurar todo"):
+        st.session_state.df_camaras_activo = {
+            k: v.copy() for k, v in df_camaras_original.items()
+        }
+        st.session_state.df_camaras_eliminados = {
+            k: pd.DataFrame(columns=v.columns)
+            for k, v in df_camaras_original.items()
+        }
+        st.session_state.axis_frozen_tab2 = False
+        st.session_state.axis_limits_tab2 = {}
+        st.rerun()
 
     # --------------------------------------------------
     # FILTRO POR X (COMÚN)
@@ -309,9 +322,7 @@ with tab2:
     # --------------------------------------------------
     fig = go.Figure()
 
-    puntos_seleccionables = {}
-
-    for camara in camaras_sel:
+    for camara, y_vars in y_vars_por_camara.items():
         df_cam = df_camaras_activo[camara]
         df_cam = df_cam[
             (df_cam[x_var] >= rx_min) &
@@ -324,7 +335,7 @@ with tab2:
             ry_min, ry_max = st.slider(
                 f"{camara} – rango {y}",
                 ymin, ymax, (ymin, ymax),
-                key=f"{camara}_{y}"
+                key=f"slider_{camara}_{y}"
             )
 
             df_y = df_cam[
@@ -399,10 +410,8 @@ with tab2:
     # EXCLUSIÓN DESDE GRÁFICO
     # --------------------------------------------------
     if event and event.selection and event.selection.points:
-        seleccion = event.selection.points
-
         if st.button("Excluir puntos seleccionados del gráfico"):
-            for p in seleccion:
+            for p in event.selection.points:
                 camara, idx = p["customdata"]
                 df_cam = df_camaras_activo[camara]
 
@@ -419,7 +428,7 @@ with tab2:
             st.rerun()
 
     # --------------------------------------------------
-    # EXCLUSIÓN MANUAL POR TABLA (POR CÁMARA)
+    # EXCLUSIÓN MANUAL POR TABLA
     # --------------------------------------------------
     st.markdown("---")
     st.subheader("Excluir puntos manualmente por cámara")
@@ -449,9 +458,7 @@ with tab2:
                     ignore_index=True
                 )
 
-                df_camaras_activo[camara] = (
-                    df_camaras_activo[camara].drop(filas)
-                )
+                df_camaras_activo[camara] = df_camaras_activo[camara].drop(filas)
                 st.rerun()
 
     # --------------------------------------------------
