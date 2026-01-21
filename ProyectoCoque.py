@@ -158,7 +158,7 @@ if uploaded_files:
         # Evitar cargar dos veces la misma cámara
         if camara in st.session_state.df_camaras_original:
             st.sidebar.info(
-                f"La cámara {camara} ya está cargada (se omite)"
+                f"La cámara {camara} ya está cargada"
             )
             continue
 
