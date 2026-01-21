@@ -212,7 +212,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     pass
 # ============================================================
-# PESTAÑA 2 — GRAFICADO AVANZADO MULTICÁMARA (Y INDEPENDIENTE)
+# PESTAÑA 2 — GRAFICADO
 # ============================================================
 with tab2:
 
@@ -232,7 +232,7 @@ with tab2:
     camaras_disponibles = sorted(df_camaras_activo.keys())
 
     # --------------------------------------------------
-    # SELECCIÓN DE CÁMARAS
+    # SELECCIÓN DE CÁMARAS A REPRESENTAR
     # --------------------------------------------------
     camaras_sel = st.multiselect(
         "Cámaras a representar",
@@ -245,16 +245,24 @@ with tab2:
         st.stop()
 
     # --------------------------------------------------
-    # VARIABLE X (COMÚN)
+    # SELECCIÓN DE CÁMARA FUENTE DE X
     # --------------------------------------------------
-    df_ref = df_camaras_activo[camaras_sel[0]]
-    cols_num = df_ref.select_dtypes(include="number").columns.tolist()
+    camara_x = st.selectbox(
+        "Cámara de referencia para el eje X",
+        camaras_sel
+    )
 
-    if len(cols_num) < 2:
-        st.error("Se necesitan columnas numéricas.")
+    df_x_ref = df_camaras_activo[camara_x]
+    cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
+
+    if len(cols_num_x) < 1:
+        st.error("La cámara de referencia no tiene columnas numéricas.")
         st.stop()
 
-    x_var = st.selectbox("Variable eje X (común)", cols_num)
+    x_var = st.selectbox(
+        "Variable eje X (común)",
+        cols_num_x
+    )
 
     # --------------------------------------------------
     # SELECCIÓN DE Y POR CÁMARA
@@ -278,7 +286,7 @@ with tab2:
             y_vars_por_camara[camara] = y_sel
 
     if not y_vars_por_camara:
-        st.warning("Seleccione al menos una variable Y en alguna cámara.")
+        st.warning("Seleccione al menos una variable Y.")
         st.stop()
 
     # --------------------------------------------------
@@ -297,15 +305,15 @@ with tab2:
         st.rerun()
 
     # --------------------------------------------------
-    # FILTRO POR X (COMÚN)
+    # FILTRO POR X (USANDO CÁMARA DE REFERENCIA)
     # --------------------------------------------------
-    xmin = min(df_camaras_activo[c][x_var].min() for c in camaras_sel)
-    xmax = max(df_camaras_activo[c][x_var].max() for c in camaras_sel)
+    xmin = float(df_x_ref[x_var].min())
+    xmax = float(df_x_ref[x_var].max())
 
     rx_min, rx_max = st.slider(
-        f"Rango para {x_var}",
-        float(xmin), float(xmax),
-        (float(xmin), float(xmax))
+        f"Rango para {x_var} (cámara {camara_x})",
+        xmin, xmax,
+        (xmin, xmax)
     )
 
     # --------------------------------------------------
@@ -324,10 +332,13 @@ with tab2:
 
     for camara, y_vars in y_vars_por_camara.items():
         df_cam = df_camaras_activo[camara]
-        df_cam = df_cam[
-            (df_cam[x_var] >= rx_min) &
-            (df_cam[x_var] <= rx_max)
-        ]
+
+        # Filtrado por X usando valores de ESA cámara
+        if x_var in df_cam.columns:
+            df_cam = df_cam[
+                (df_cam[x_var] >= rx_min) &
+                (df_cam[x_var] <= rx_max)
+            ]
 
         for y in y_vars:
             ymin, ymax = float(df_cam[y].min()), float(df_cam[y].max())
@@ -345,7 +356,7 @@ with tab2:
 
             fig.add_trace(
                 go.Scatter(
-                    x=df_y[x_var],
+                    x=df_y[x_var] if x_var in df_y.columns else df_y.index,
                     y=df_y[y],
                     mode="markers",
                     name=f"{camara} – {y}",
@@ -353,8 +364,8 @@ with tab2:
                 )
             )
 
-            # Regresión independiente
-            if len(df_y) >= 2:
+            # Regresión lineal independiente
+            if x_var in df_y.columns and len(df_y) >= 2:
                 x = df_y[x_var].values
                 yy = df_y[y].values
 
@@ -377,24 +388,18 @@ with tab2:
 
     fig.update_layout(
         height=600,
-        xaxis_title=x_var,
+        xaxis_title=f"{x_var} (ref: {camara_x})",
         yaxis_title="Variables",
         legend_title="Cámara / Variable"
     )
 
     # --------------------------------------------------
-    # CONGELAR EJES TRAS PRIMER AUTOAJUSTE
+    # CONGELAR EJES
     # --------------------------------------------------
     if st.session_state.axis_frozen_tab2:
         fig.update_layout(
-            xaxis=dict(
-                range=st.session_state.axis_limits_tab2["x"],
-                autorange=False
-            ),
-            yaxis=dict(
-                range=st.session_state.axis_limits_tab2["y"],
-                autorange=False
-            )
+            xaxis=dict(range=st.session_state.axis_limits_tab2["x"], autorange=False),
+            yaxis=dict(range=st.session_state.axis_limits_tab2["y"], autorange=False)
         )
 
     event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
