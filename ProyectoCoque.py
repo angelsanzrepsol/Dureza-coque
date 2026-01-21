@@ -179,29 +179,23 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     pass
 # ============================================================
-# PESTAÑA 2 — GRAFICADO AVANZADO CON CONGELACIÓN DE EJES
+# PESTAÑA 2 — GRAFICADO CON EXCLUSIÓN MANUAL + FILTRADO
 # ============================================================
 with tab2:
 
-    st.subheader("Graficado interactivo avanzado de variables de proceso")
+    st.subheader("Graficado interactivo de variables de proceso")
 
     if df_proceso is None or df_proceso.empty:
         st.warning("Cargue primero un archivo de datos de proceso.")
     else:
         # --------------------------------------------------
-        # ESTADOS BASE
+        # ESTADOS
         # --------------------------------------------------
         if "df_activo_tab2" not in st.session_state:
             st.session_state.df_activo_tab2 = df_proceso.copy()
 
         if "df_eliminados_tab2" not in st.session_state:
             st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
-
-        if "axis_frozen_tab2" not in st.session_state:
-            st.session_state.axis_frozen_tab2 = False
-
-        if "axis_limits_tab2" not in st.session_state:
-            st.session_state.axis_limits_tab2 = {}
 
         df_activo = st.session_state.df_activo_tab2
         df_eliminados = st.session_state.df_eliminados_tab2
@@ -227,20 +221,18 @@ with tab2:
                 )
 
             with colr:
-                if st.button("Restaurar todo"):
+                if st.button("Restaurar eliminaciones"):
                     st.session_state.df_activo_tab2 = df_proceso.copy()
                     st.session_state.df_eliminados_tab2 = pd.DataFrame(columns=df_proceso.columns)
-                    st.session_state.axis_frozen_tab2 = False
-                    st.session_state.axis_limits_tab2 = {}
                     st.rerun()
 
             if not y_vars:
                 st.warning("Seleccione al menos una variable en Y.")
             else:
                 # --------------------------------------------------
-                # FILTRADO REAL POR SLIDERS (ELIMINA FILAS)
+                # FILTRADO POR SLIDERS (REDEFINE DATOS VISIBLES)
                 # --------------------------------------------------
-                st.markdown("Filtros por rango (eliminan datos, no ajustan ejes)")
+                st.markdown("Filtrado por rangos (redefine los datos mostrados)")
 
                 df_filtrado = df_activo.copy()
 
@@ -262,7 +254,7 @@ with tab2:
                     ]
 
                 # --------------------------------------------------
-                # GRÁFICO (AUTOESCALA SOLO LA PRIMERA VEZ)
+                # GRÁFICO (EJES SE REAJUSTAN AL FILTRADO)
                 # --------------------------------------------------
                 fig = go.Figure()
 
@@ -272,7 +264,8 @@ with tab2:
                             x=df_filtrado[x_var],
                             y=df_filtrado[y],
                             mode="markers",
-                            name=y
+                            name=y,
+                            customdata=df_filtrado.index
                         )
                     )
 
@@ -305,39 +298,40 @@ with tab2:
                     yaxis_title="Variables"
                 )
 
+                event = st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    on_select="rerun"
+                )
+
                 # --------------------------------------------------
-                # CONGELAR EJES TRAS EL PRIMER AUTOAJUSTE
+                # EXCLUSIÓN MANUAL DESDE GRÁFICO
                 # --------------------------------------------------
-                if st.session_state.axis_frozen_tab2:
-                    fig.update_layout(
-                        xaxis=dict(
-                            range=st.session_state.axis_limits_tab2["x"],
-                            autorange=False
-                        ),
-                        yaxis=dict(
-                            range=st.session_state.axis_limits_tab2["y"],
-                            autorange=False
+                if event and event.selection and event.selection.points:
+                    indices = list(set(p["customdata"] for p in event.selection.points))
+
+                    if st.button("Eliminar puntos seleccionados"):
+                        puntos = df_activo.loc[indices]
+
+                        st.session_state.df_eliminados_tab2 = pd.concat(
+                            [df_eliminados, puntos],
+                            ignore_index=True
                         )
-                    )
 
-                chart = st.plotly_chart(fig, use_container_width=True)
-
-                # Guardar límites SOLO una vez
-                if not st.session_state.axis_frozen_tab2:
-                    st.session_state.axis_limits_tab2 = {
-                        "x": fig.layout.xaxis.range,
-                        "y": fig.layout.yaxis.range
-                    }
-                    st.session_state.axis_frozen_tab2 = True
+                        st.session_state.df_activo_tab2 = (
+                            df_activo.drop(indices)
+                            .reset_index(drop=True)
+                        )
+                        st.rerun()
 
         # --------------------------------------------------
         # EXCLUSIÓN MANUAL POR TABLA
         # --------------------------------------------------
         st.markdown("---")
-        st.subheader("Excluir puntos manualmente")
+        st.subheader("Eliminar puntos manualmente desde tabla")
 
         df_tabla = df_activo.copy()
-        df_tabla["Excluir"] = False
+        df_tabla["Eliminar"] = False
 
         with st.form("form_exclusion_tab2"):
             df_editado = st.data_editor(
@@ -345,10 +339,10 @@ with tab2:
                 num_rows="fixed",
                 use_container_width=True
             )
-            submit = st.form_submit_button("Excluir filas marcadas")
+            submit = st.form_submit_button("Eliminar filas marcadas")
 
         if submit:
-            filas = df_editado[df_editado["Excluir"]].index.tolist()
+            filas = df_editado[df_editado["Eliminar"]].index.tolist()
 
             if filas:
                 puntos = df_activo.loc[filas]
@@ -365,13 +359,13 @@ with tab2:
                 st.rerun()
 
         # --------------------------------------------------
-        # TABLA DE EXCLUIDOS
+        # TABLA DE ELIMINADOS
         # --------------------------------------------------
         st.markdown("---")
-        st.subheader("Puntos excluidos del análisis")
+        st.subheader("Puntos eliminados manualmente")
 
         if st.session_state.df_eliminados_tab2.empty:
-            st.info("No hay puntos excluidos.")
+            st.info("No hay puntos eliminados.")
         else:
             st.dataframe(
                 st.session_state.df_eliminados_tab2,
