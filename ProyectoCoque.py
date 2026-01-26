@@ -271,14 +271,24 @@ with tab1:
     
         df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
         fig = px.scatter(df_plot, x=x_var, y=y)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key=f"vg_plot_{camara}_{y}"
+    )
+
 
 
         filtros_temp[y] = (rmin, rmax)
 
         df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
         fig = px.scatter(df_plot, x=x_var, y=y)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key=f"vg_plot_{camara}_{y}"
+    )
+
 
     st.markdown("---")
     nombre_filtro = st.text_input("Nombre del filtro")
