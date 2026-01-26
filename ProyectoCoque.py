@@ -142,6 +142,20 @@ if "df_camaras_activo" not in st.session_state:
 
 if "df_camaras_eliminados" not in st.session_state:
     st.session_state.df_camaras_eliminados = {}
+# ===============================
+# ESTADOS PARA FILTROS GUARDADOS
+# ===============================
+if "filtros_guardados" not in st.session_state:
+    st.session_state.filtros_guardados = {}
+
+if "filtro_activo" not in st.session_state:
+    st.session_state.filtro_activo = None
+
+# ===============================
+# ESTADO PARA DESCARGA TAB 2
+# ===============================
+if "datos_descarga_tab2" not in st.session_state:
+    st.session_state.datos_descarga_tab2 = {}
 
 if uploaded_files:
     for uploaded_file in uploaded_files:
@@ -198,8 +212,9 @@ else:
 # ============================================================
 # PESTAÑAS OBLIGATORIAS (VACÍAS)
 # ============================================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab_filtros, tab2, tab3, tab4, tab5 = st.tabs([
     "Visión General",
+    "Filtros guardados",
     "Graficado",
     "Correlaciones",
     "Modelo Predictivo",
@@ -210,9 +225,82 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # PESTAÑA 1 — VACÍA
 # ============================================================
 with tab1:
-    pass
+    st.subheader("Visión General — creación de filtros")
+
+    if not st.session_state.df_camaras_original:
+        st.info("Cargue datos primero")
+        st.stop()
+
+    camara = st.selectbox(
+        "Cámara",
+        st.session_state.df_camaras_original.keys()
+    )
+
+    df = st.session_state.df_camaras_original[camara]
+    cols = df.select_dtypes(include="number").columns.tolist()
+
+    x_var = st.selectbox("Variable base (X)", cols)
+
+    filtros_temp = {}
+
+    st.markdown("### Ajuste de rangos por variable")
+
+    for y in cols:
+        if y == x_var:
+            continue
+
+        ymin, ymax = float(df[y].min()), float(df[y].max())
+        rmin, rmax = st.slider(
+            f"{y}",
+            ymin, ymax,
+            (ymin, ymax),
+            key=f"vg_{camara}_{y}"
+        )
+
+        filtros_temp[y] = (rmin, rmax)
+
+        df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
+        fig = px.scatter(df_plot, x=x_var, y=y)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+    nombre_filtro = st.text_input("Nombre del filtro")
+
+    if st.button("Guardar filtro"):
+        if nombre_filtro:
+            st.session_state.filtros_guardados[nombre_filtro] = {
+                "camara": camara,
+                "x_var": x_var,
+                "rangos": filtros_temp
+            }
+            st.success(f"Filtro '{nombre_filtro}' guardado")
 # ============================================================
-# PESTAÑA 2 — GRAFICADO
+# PESTAÑA 2 — Filtros
+# ============================================================
+with tab_filtros:
+    st.subheader("Filtros guardados")
+
+    if not st.session_state.filtros_guardados:
+        st.info("No hay filtros guardados")
+    else:
+        for nombre, f in st.session_state.filtros_guardados.items():
+            with st.expander(nombre):
+                st.write(f"Cámara: {f['camara']}")
+                st.write(f"Variable X: {f['x_var']}")
+                st.json(f["rangos"])
+
+                col1, col2 = st.columns(2)
+
+                if col1.button("Aplicar", key=f"ap_{nombre}"):
+                    st.session_state.filtro_activo = nombre
+                    st.success("Filtro aplicado")
+
+                if col2.button("Eliminar", key=f"del_{nombre}"):
+                    del st.session_state.filtros_guardados[nombre]
+                    st.rerun()
+
+# ============================================================
+# PESTAÑA 3 — GRAFICADO
 # ============================================================
 with tab2:
 
@@ -263,6 +351,19 @@ with tab2:
         "Variable eje X (común)",
         cols_num_x
     )
+    # --------------------------------------------------
+    # FILTRO PREFIJADO
+    # --------------------------------------------------
+    filtro_sel = st.selectbox(
+        "Filtro prefijado",
+        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
+    )
+    
+    if filtro_sel != "(ninguno)":
+        st.session_state.filtro_activo = filtro_sel
+    else:
+        st.session_state.filtro_activo = None
+
 
     # --------------------------------------------------
     # SELECCIÓN DE Y POR CÁMARA
@@ -328,10 +429,26 @@ with tab2:
     # --------------------------------------------------
     # GRÁFICO
     # --------------------------------------------------
+    # --------------------------------------------------
+    # APLICAR FILTRO GUARDADO
+    # --------------------------------------------------
+    if st.session_state.filtro_activo:
+        f = st.session_state.filtros_guardados[st.session_state.filtro_activo]
+    
+        if f["camara"] == camara_x and f["x_var"] == x_var:
+            for cam in camaras_sel:
+                df = df_camaras_activo[cam]
+                for var, (vmin, vmax) in f["rangos"].items():
+                    if var in df.columns:
+                        df = df[(df[var] >= vmin) & (df[var] <= vmax)]
+                df_camaras_activo[cam] = df
+
     fig = go.Figure()
+    st.session_state.datos_descarga_tab2 = {}
 
     for camara, y_vars in y_vars_por_camara.items():
         df_cam = df_camaras_activo[camara]
+        st.session_state.datos_descarga_tab2[camara] = []
 
         # Filtrado por X usando valores de ESA cámara
         if x_var in df_cam.columns:
@@ -353,6 +470,12 @@ with tab2:
                 (df_cam[y] >= ry_min) &
                 (df_cam[y] <= ry_max)
             ]
+            # Guardar datos representados para descarga
+            df_export = df_y.copy()
+            df_export["Variable_X"] = x_var
+            df_export["Variable_Y"] = y
+            
+            st.session_state.datos_descarga_tab2[camara].append(df_export)
 
             fig.add_trace(
                 go.Scatter(
@@ -485,6 +608,34 @@ with tab2:
         st.info("No hay puntos excluidos.")
     else:
         st.dataframe(df_excluidos_total, use_container_width=True)
+    from io import BytesIO
+    
+    st.markdown("---")
+    st.subheader("Descargar datos representados")
+    
+    if any(st.session_state.datos_descarga_tab2.values()):
+        output = BytesIO()
+    
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for cam, lista in st.session_state.datos_descarga_tab2.items():
+                if lista:
+                    pd.concat(lista, ignore_index=True).to_excel(
+                        writer,
+                        sheet_name=cam[:31],
+                        index=False
+                    )
+    
+        output.seek(0)
+        nombre = st.session_state.filtro_activo or "sin_filtro"
+    
+        st.download_button(
+            "📥 Descargar Excel (una hoja por cámara)",
+            data=output,
+            file_name=f"datos_grafico_{nombre}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No hay datos para descargar")
 
 # ============================================================
 # PESTAÑA 3 — VACÍA
