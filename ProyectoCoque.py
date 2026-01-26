@@ -248,14 +248,31 @@ with tab1:
     for y in cols:
         if y == x_var:
             continue
-
-        ymin, ymax = float(df[y].min()), float(df[y].max())
+    
+        serie = df[y].dropna()
+    
+        # --------------------------------------------------
+        # PROTECCIÓN: columnas constantes o vacías
+        # --------------------------------------------------
+        if serie.empty or serie.min() == serie.max():
+            st.info(f"Variable '{y}' constante o sin rango. Se ignora.")
+            continue
+    
+        ymin, ymax = float(serie.min()), float(serie.max())
+    
         rmin, rmax = st.slider(
             f"{y}",
             ymin, ymax,
             (ymin, ymax),
             key=f"vg_{camara}_{y}"
         )
+    
+        filtros_temp[y] = (rmin, rmax)
+    
+        df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
+        fig = px.scatter(df_plot, x=x_var, y=y)
+        st.plotly_chart(fig, use_container_width=True)
+
 
         filtros_temp[y] = (rmin, rmax)
 
