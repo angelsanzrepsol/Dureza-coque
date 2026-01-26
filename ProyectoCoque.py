@@ -245,48 +245,23 @@ with tab1:
 
     st.markdown("### Ajuste de rangos por variable")
 
-    for i, y in enumerate(cols):
+    for y in cols:
         if y == x_var:
             continue
-    
-        serie = df[y].dropna()
-        if serie.empty or serie.min() == serie.max():
-            continue
-    
-        ymin, ymax = float(serie.min()), float(serie.max())
+
+        ymin, ymax = float(df[y].min()), float(df[y].max())
         rmin, rmax = st.slider(
             f"{y}",
             ymin, ymax,
             (ymin, ymax),
-            key=f"vg_slider_{camara}_{i}"
-        )
-    
-        filtros_temp[y] = (rmin, rmax)
-    
-        df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
-        fig = px.scatter(df_plot, x=x_var, y=y)
-    
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key=f"vg_plot_{camara}_{i}"
+            key=f"vg_{camara}_{y}"
         )
 
-    
-        filtros_temp[y] = (rmin, rmax)
-    
-        df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
-        fig = px.scatter(df_plot, x=x_var, y=y)
-        st.plotly_chart(fig, use_container_width=True, key=f"vg_plot_{camara}_{y}")
-
-
-
         filtros_temp[y] = (rmin, rmax)
 
         df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
         fig = px.scatter(df_plot, x=x_var, y=y)
-        st.plotly_chart(fig, use_container_width=True, key=f"vg_plot_{camara}_{y}")
-
+        st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
     nombre_filtro = st.text_input("Nombre del filtro")
