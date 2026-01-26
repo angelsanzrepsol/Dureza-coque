@@ -245,27 +245,33 @@ with tab1:
 
     st.markdown("### Ajuste de rangos por variable")
 
-    for y in cols:
+    for i, y in enumerate(cols):
         if y == x_var:
             continue
     
         serie = df[y].dropna()
-    
-        # --------------------------------------------------
-        # PROTECCIÓN: columnas constantes o vacías
-        # --------------------------------------------------
         if serie.empty or serie.min() == serie.max():
-            st.info(f"Variable '{y}' constante o sin rango. Se ignora.")
             continue
     
         ymin, ymax = float(serie.min()), float(serie.max())
-    
         rmin, rmax = st.slider(
             f"{y}",
             ymin, ymax,
             (ymin, ymax),
-            key=f"vg_{camara}_{y}"
+            key=f"vg_slider_{camara}_{i}"
         )
+    
+        filtros_temp[y] = (rmin, rmax)
+    
+        df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
+        fig = px.scatter(df_plot, x=x_var, y=y)
+    
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            key=f"vg_plot_{camara}_{i}"
+        )
+
     
         filtros_temp[y] = (rmin, rmax)
     
