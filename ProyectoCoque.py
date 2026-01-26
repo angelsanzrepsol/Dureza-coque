@@ -271,11 +271,7 @@ with tab1:
     
         df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
         fig = px.scatter(df_plot, x=x_var, y=y)
-        st.plotly_chart(
-        fig,
-        use_container_width=True,
-        key=f"vg_plot_{camara}_{y}"
-    )
+        st.plotly_chart(fig, use_container_width=True, key=f"vg_plot_{camara}_{y}")
 
 
 
@@ -283,11 +279,7 @@ with tab1:
 
         df_plot = df[(df[y] >= rmin) & (df[y] <= rmax)]
         fig = px.scatter(df_plot, x=x_var, y=y)
-        st.plotly_chart(
-        fig,
-        use_container_width=True,
-        key=f"vg_plot_{camara}_{y}"
-    )
+        st.plotly_chart(fig, use_container_width=True, key=f"vg_plot_{camara}_{y}")
 
 
     st.markdown("---")
