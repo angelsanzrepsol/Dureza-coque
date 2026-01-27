@@ -570,11 +570,25 @@ with tab2:
             ]
 
         for y in y_vars:
-            ymin, ymax = float(df_cam[y].min()), float(df_cam[y].max())
-
+            # -----------------------------------------
+            # CONTROL DE DATAFRAME VACÍO
+            # -----------------------------------------
+            if df_cam.empty or df_cam[y].dropna().empty:
+                st.info(f"{camara} – {y}: sin datos tras aplicar filtros")
+                continue
+            
+            ymin = float(df_cam[y].min())
+            ymax = float(df_cam[y].max())
+            
+            if np.isnan(ymin) or np.isnan(ymax) or ymin == ymax:
+                st.info(f"{camara} – {y}: rango no válido")
+                continue
+            
             ry_min, ry_max = st.slider(
                 f"{camara} – rango {y}",
-                ymin, ymax, (ymin, ymax),
+                ymin,
+                ymax,
+                (ymin, ymax),
                 key=f"slider_{camara}_{y}"
             )
 
