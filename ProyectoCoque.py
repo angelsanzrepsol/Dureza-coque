@@ -346,8 +346,9 @@ with tab_filtros:
                 col1, col2, col3 = st.columns(3)
 
                 # ---------------------------
-                # ACTIVAR / DESACTIVAR FILTRO
+                # ACTIVAR FILTRO (SOLO 1 POR CÁMARA)
                 # ---------------------------
+                camara_filtro = f["camara"]
                 activo = nombre in st.session_state.filtros_activos
                 
                 if col1.checkbox(
@@ -355,6 +356,11 @@ with tab_filtros:
                     value=activo,
                     key=f"chk_{nombre}"
                 ):
+                    # Desactivar otros filtros de la MISMA cámara
+                    for n in list(st.session_state.filtros_activos):
+                        if st.session_state.filtros_guardados[n]["camara"] == camara_filtro:
+                            st.session_state.filtros_activos.discard(n)
+                
                     st.session_state.filtros_activos.add(nombre)
                 else:
                     st.session_state.filtros_activos.discard(nombre)
