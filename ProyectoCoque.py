@@ -9,6 +9,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import re
+import json
+from io import BytesIO
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -279,6 +281,47 @@ with tab1:
 # ============================================================
 with tab_filtros:
     st.subheader("Filtros guardados")
+# --------------------------------------------------
+# DESCARGAR FILTROS
+# --------------------------------------------------
+if st.session_state.filtros_guardados:
+    filtros_json = json.dumps(
+        st.session_state.filtros_guardados,
+        indent=4
+    )
+
+    st.download_button(
+        "📥 Descargar filtros",
+        data=filtros_json,
+        file_name="filtros_coque.json",
+        mime="application/json"
+    )
+# --------------------------------------------------
+# IMPORTAR FILTROS
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("### Importar filtros")
+
+filtro_file = st.file_uploader(
+    "Subir archivo de filtros (.json)",
+    type=["json"]
+)
+
+if filtro_file is not None:
+    try:
+        filtros_importados = json.load(filtro_file)
+
+        if isinstance(filtros_importados, dict):
+            # Mezclar con los existentes
+            for k, v in filtros_importados.items():
+                if k not in st.session_state.filtros_guardados:
+                    st.session_state.filtros_guardados[k] = v
+            st.success("Filtros importados correctamente")
+        else:
+            st.error("Formato de filtros no válido")
+
+    except Exception as e:
+        st.error(f"Error leyendo el archivo: {e}")
 
     if not st.session_state.filtros_guardados:
         st.info("No hay filtros guardados")
