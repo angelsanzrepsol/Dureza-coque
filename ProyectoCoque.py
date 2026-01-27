@@ -271,14 +271,10 @@ with tab1:
     if st.button("Guardar filtro"):
         if nombre_filtro:
             st.session_state.filtros_guardados[nombre_filtro] = {
-                  "x_var": x_var,
-                  "camaras": {
-                      camara: {
-                          "rangos": filtros_temp
-                      }
-                  }
-                }
-
+                "camara": camara,
+                "x_var": x_var,
+                "rangos": filtros_temp
+            }
             st.success(f"Filtro '{nombre_filtro}' guardado")
 # ============================================================
 # PESTAÑA — FILTROS GUARDADOS
@@ -436,10 +432,6 @@ with tab2:
         "Variable eje X (común)",
         cols_num_x
     )
-    color_var = st.selectbox(
-    "Variable para rellenar puntos",
-    ["(ninguna)"] + cols_num_x
-    )
     # --------------------------------------------------
     # FILTRO PREFIJADO
     # --------------------------------------------------
@@ -524,16 +516,13 @@ with tab2:
     if st.session_state.filtro_activo:
         f = st.session_state.filtros_guardados[st.session_state.filtro_activo]
     
-        if f["x_var"] == x_var:
+        if f["camara"] == camara_x and f["x_var"] == x_var:
             for cam in camaras_sel:
-                if cam in f["camaras"]:
-                    df = df_camaras_activo[cam]
-    
-                    for var, (vmin, vmax) in f["camaras"][cam]["rangos"].items():
-                        if var in df.columns:
-                            df = df[(df[var] >= vmin) & (df[var] <= vmax)]
-    
-                    df_camaras_activo[cam] = df
+                df = df_camaras_activo[cam]
+                for var, (vmin, vmax) in f["rangos"].items():
+                    if var in df.columns:
+                        df = df[(df[var] >= vmin) & (df[var] <= vmax)]
+                df_camaras_activo[cam] = df
 
     fig = go.Figure()
     st.session_state.datos_descarga_tab2 = {}
@@ -569,32 +558,15 @@ with tab2:
             
             st.session_state.datos_descarga_tab2[camara].append(df_export)
 
-            if color_var != "(ninguna)" and color_var in df_y.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_y[x_var],
-                        y=df_y[y],
-                        mode="markers",
-                        name=f"{camara} – {y}",
-                        customdata=[(camara, i) for i in df_y.index],
-                        marker=dict(
-                            color=df_y[color_var],
-                            colorscale="Viridis",
-                            showscale=True,
-                            colorbar=dict(title=color_var)
-                        )
-                    )
+            fig.add_trace(
+                go.Scatter(
+                    x=df_y[x_var] if x_var in df_y.columns else df_y.index,
+                    y=df_y[y],
+                    mode="markers",
+                    name=f"{camara} – {y}",
+                    customdata=[(camara, i) for i in df_y.index]
                 )
-            else:
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_y[x_var],
-                        y=df_y[y],
-                        mode="markers",
-                        name=f"{camara} – {y}",
-                        customdata=[(camara, i) for i in df_y.index]
-                    )
-                )
+            )
 
             # Regresión lineal independiente
             if x_var in df_y.columns and len(df_y) >= 2:
