@@ -277,70 +277,108 @@ with tab1:
             }
             st.success(f"Filtro '{nombre_filtro}' guardado")
 # ============================================================
-# PESTAÑA 2 — Filtros
+# PESTAÑA — FILTROS GUARDADOS
 # ============================================================
 with tab_filtros:
     st.subheader("Filtros guardados")
-# --------------------------------------------------
-# DESCARGAR FILTROS
-# --------------------------------------------------
-if st.session_state.filtros_guardados:
-    filtros_json = json.dumps(
-        st.session_state.filtros_guardados,
-        indent=4
+
+    # --------------------------------------------------
+    # DESCARGAR TODOS LOS FILTROS
+    # --------------------------------------------------
+    if st.session_state.filtros_guardados:
+        filtros_json = json.dumps(
+            st.session_state.filtros_guardados,
+            indent=4
+        )
+
+        st.download_button(
+            "📥 Descargar TODOS los filtros",
+            data=filtros_json,
+            file_name="filtros_coque.json",
+            mime="application/json"
+        )
+
+    # --------------------------------------------------
+    # IMPORTAR FILTROS
+    # --------------------------------------------------
+    st.markdown("---")
+    st.markdown("### Importar filtros")
+
+    filtro_file = st.file_uploader(
+        "Subir archivo de filtros (.json)",
+        type=["json"],
+        key="upload_filtros"
     )
 
-    st.download_button(
-        "📥 Descargar filtros",
-        data=filtros_json,
-        file_name="filtros_coque.json",
-        mime="application/json"
-    )
-# --------------------------------------------------
-# IMPORTAR FILTROS
-# --------------------------------------------------
-st.markdown("---")
-st.markdown("### Importar filtros")
+    if filtro_file is not None:
+        try:
+            filtros_importados = json.load(filtro_file)
 
-filtro_file = st.file_uploader(
-    "Subir archivo de filtros (.json)",
-    type=["json"]
-)
+            if isinstance(filtros_importados, dict):
+                for nombre, filtro in filtros_importados.items():
+                    st.session_state.filtros_guardados[nombre] = filtro
 
-if filtro_file is not None:
-    try:
-        filtros_importados = json.load(filtro_file)
+                st.success("Filtros importados correctamente")
+            else:
+                st.error("El archivo no tiene el formato correcto")
 
-        if isinstance(filtros_importados, dict):
-            # Mezclar con los existentes
-            for k, v in filtros_importados.items():
-                if k not in st.session_state.filtros_guardados:
-                    st.session_state.filtros_guardados[k] = v
-            st.success("Filtros importados correctamente")
-        else:
-            st.error("Formato de filtros no válido")
+        except Exception as e:
+            st.error(f"Error al leer el archivo: {e}")
 
-    except Exception as e:
-        st.error(f"Error leyendo el archivo: {e}")
+    # --------------------------------------------------
+    # LISTADO DE FILTROS
+    # --------------------------------------------------
+    st.markdown("---")
+    st.markdown("### Filtros disponibles")
 
     if not st.session_state.filtros_guardados:
         st.info("No hay filtros guardados")
     else:
         for nombre, f in st.session_state.filtros_guardados.items():
             with st.expander(nombre):
-                st.write(f"Cámara: {f['camara']}")
-                st.write(f"Variable X: {f['x_var']}")
-                st.json(f["rangos"])
 
-                col1, col2 = st.columns(2)
+                st.write(f"**Cámara:** {f.get('camara', '-')}")
+                st.write(f"**Variable X:** {f.get('x_var', '-')}")
+                st.markdown("**Rangos:**")
+                st.json(f.get("rangos", {}))
 
-                if col1.button("Aplicar", key=f"ap_{nombre}"):
+                col1, col2, col3 = st.columns(3)
+
+                # ---------------------------
+                # APLICAR FILTRO
+                # ---------------------------
+                if col1.button("Aplicar", key=f"aplicar_{nombre}"):
                     st.session_state.filtro_activo = nombre
-                    st.success("Filtro aplicado")
+                    st.success(f"Filtro '{nombre}' aplicado")
 
-                if col2.button("Eliminar", key=f"del_{nombre}"):
+                # ---------------------------
+                # ELIMINAR FILTRO
+                # ---------------------------
+                if col2.button("Eliminar", key=f"eliminar_{nombre}"):
                     del st.session_state.filtros_guardados[nombre]
+                    if st.session_state.filtro_activo == nombre:
+                        st.session_state.filtro_activo = None
                     st.rerun()
+
+                # ---------------------------
+                # DESCARGAR FILTRO INDIVIDUAL
+                # ---------------------------
+                filtro_individual = {nombre: f}
+                filtro_json = json.dumps(filtro_individual, indent=4)
+
+                nombre_archivo = re.sub(
+                    r"[^a-zA-Z0-9_-]",
+                    "_",
+                    nombre
+                )
+
+                col3.download_button(
+                    "📥 Descargar",
+                    data=filtro_json,
+                    file_name=f"{nombre_archivo}.json",
+                    mime="application/json",
+                    key=f"download_{nombre}"
+                )
 
 # ============================================================
 # PESTAÑA 3 — GRAFICADO
