@@ -150,8 +150,9 @@ if "df_camaras_eliminados" not in st.session_state:
 if "filtros_guardados" not in st.session_state:
     st.session_state.filtros_guardados = {}
 
-if "filtro_activo" not in st.session_state:
-    st.session_state.filtro_activo = None
+if "filtros_activos" not in st.session_state:
+    st.session_state.filtros_activos = set()
+
 
 # ===============================
 # ESTADO PARA DESCARGA TAB 2
@@ -345,11 +346,18 @@ with tab_filtros:
                 col1, col2, col3 = st.columns(3)
 
                 # ---------------------------
-                # APLICAR FILTRO
+                # ACTIVAR / DESACTIVAR FILTRO
                 # ---------------------------
-                if col1.button("Aplicar", key=f"aplicar_{nombre}"):
-                    st.session_state.filtro_activo = nombre
-                    st.success(f"Filtro '{nombre}' aplicado")
+                activo = nombre in st.session_state.filtros_activos
+                
+                if col1.checkbox(
+                    "Activo",
+                    value=activo,
+                    key=f"chk_{nombre}"
+                ):
+                    st.session_state.filtros_activos.add(nombre)
+                else:
+                    st.session_state.filtros_activos.discard(nombre)
 
                 # ---------------------------
                 # ELIMINAR FILTRO
@@ -506,6 +514,29 @@ with tab2:
 
     if "axis_limits_tab2" not in st.session_state:
         st.session_state.axis_limits_tab2 = {}
+    # --------------------------------------------------
+    # APLICAR FILTROS ACTIVOS
+    # --------------------------------------------------
+    for nombre in st.session_state.filtros_activos:
+    
+        f = st.session_state.filtros_guardados[nombre]
+    
+        camara_filtro = f["camara"]
+    
+        # Solo si la cámara está seleccionada
+        if camara_filtro in camaras_sel:
+    
+            df = df_camaras_activo[camara_filtro]
+    
+            # Comprobar X
+            if f["x_var"] != x_var:
+                continue
+    
+            for var, (vmin, vmax) in f["rangos"].items():
+                if var in df.columns:
+                    df = df[(df[var] >= vmin) & (df[var] <= vmax)]
+    
+            df_camaras_activo[camara_filtro] = df
 
     # --------------------------------------------------
     # GRÁFICO
