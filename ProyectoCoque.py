@@ -134,6 +134,29 @@ uploaded_files = st.sidebar.file_uploader(
     accept_multiple_files=True,
     help="Cada archivo debe contener un código C000xA/B en el nombre"
 )
+# ============================================================
+# SIDEBAR — CARGA DE DATOS DE LABORATORIO
+# ============================================================
+st.sidebar.header("Datos de laboratorio")
+
+uploaded_lab = st.sidebar.file_uploader(
+    "Subir Excel de laboratorio",
+    type=["xlsx", "xls"]
+)
+
+if uploaded_lab:
+    try:
+        df_lab = pd.read_excel(uploaded_lab)
+
+        if df_lab.empty:
+            st.sidebar.warning("El Excel de laboratorio está vacío")
+        else:
+            st.session_state.df_laboratorio = df_lab
+            st.sidebar.success("Datos de laboratorio cargados")
+
+    except Exception as e:
+        st.sidebar.error(f"Error leyendo laboratorio: {e}")
+
 
 # Inicializar estados UNA SOLA VEZ
 if "df_camaras_original" not in st.session_state:
@@ -144,6 +167,12 @@ if "df_camaras_activo" not in st.session_state:
 
 if "df_camaras_eliminados" not in st.session_state:
     st.session_state.df_camaras_eliminados = {}
+# ===============================
+# ESTADO PARA DATOS DE LABORATORIO
+# ===============================
+if "df_laboratorio" not in st.session_state:
+    st.session_state.df_laboratorio = None
+
 # ===============================
 # ESTADOS PARA FILTROS GUARDADOS
 # ===============================
@@ -398,6 +427,13 @@ with tab_filtros:
 # PESTAÑA 3 — GRAFICADO
 # ============================================================
 with tab2:
+    # --------------------------------------------------
+    # USAR DATOS DE LABORATORIO
+    # --------------------------------------------------
+    usar_laboratorio = (
+        st.session_state.df_laboratorio is not None and
+        st.checkbox("Incluir datos de laboratorio")
+    )
 
     st.subheader("Graficado interactivo avanzado de variables de proceso")
 
@@ -446,6 +482,27 @@ with tab2:
         "Variable eje X (común)",
         cols_num_x
     )
+    # --------------------------------------------------
+    # VARIABLES DE LABORATORIO
+    # --------------------------------------------------
+    if usar_laboratorio:
+        df_lab = st.session_state.df_laboratorio
+        cols_lab_num = df_lab.select_dtypes(include="number").columns.tolist()
+    
+        x_lab = st.selectbox(
+            "Variable X laboratorio",
+            cols_lab_num,
+            key="x_lab"
+        )
+    
+        y_lab = st.multiselect(
+            "Variables Y laboratorio",
+            [c for c in cols_lab_num if c != x_lab],
+            key="y_lab"
+        )
+    else:
+        y_lab = []
+
     # --------------------------------------------------
     # FILTRO PREFIJADO
     # --------------------------------------------------
@@ -562,6 +619,23 @@ with tab2:
                 df_camaras_activo[cam] = df
 
     fig = go.Figure()
+    # --------------------------------------------------
+    # AÑADIR DATOS DE LABORATORIO AL GRÁFICO
+    # --------------------------------------------------
+    if usar_laboratorio and y_lab:
+        df_lab = st.session_state.df_laboratorio
+    
+        for y in y_lab:
+            fig.add_trace(
+                go.Scatter(
+                    x=df_lab[x_lab],
+                    y=df_lab[y],
+                    mode="markers",
+                    name=f"LAB – {y}",
+                    marker=dict(symbol="diamond", size=10)
+                )
+            )
+
     st.session_state.datos_descarga_tab2 = {}
 
     for camara, y_vars in y_vars_por_camara.items():
