@@ -147,6 +147,10 @@ uploaded_lab = st.sidebar.file_uploader(
 if uploaded_lab:
     try:
         df_lab = pd.read_excel(uploaded_lab)
+        # ---- CONVERTIR COLUMNA DÍA A FECHA ----
+        if "DÍA" in df_lab.columns:
+            df_lab["DÍA"] = pd.to_datetime(df_lab["DÍA"], errors="coerce")
+
 
         if df_lab.empty:
             st.sidebar.warning("El Excel de laboratorio está vacío")
@@ -210,6 +214,10 @@ if uploaded_files:
 
         try:
             df = pd.read_excel(uploaded_file)
+
+            # ---- CONVERTIR COLUMNA DÍA A FECHA ----
+            if "DÍA" in df.columns:
+                df["DÍA"] = pd.to_datetime(df["DÍA"], errors="coerce")
 
             if df is None or df.empty:
                 st.sidebar.warning(
@@ -472,32 +480,44 @@ with tab2:
     )
 
     df_x_ref = df_camaras_activo[camara_x]
-    cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
-
-    if len(cols_num_x) < 1:
-        st.error("La cámara de referencia no tiene columnas numéricas.")
+    cols_x = (
+    df_x_ref.select_dtypes(include="number").columns.tolist()
+    + df_x_ref.select_dtypes(include="datetime").columns.tolist()
+    )
+    
+    if len(cols_x) < 1:
+        st.error("La cámara de referencia no tiene columnas numéricas ni de fecha.")
         st.stop()
-
+    
     x_var = st.selectbox(
         "Variable eje X (común)",
-        cols_num_x
+        cols_x
     )
+
+
     # --------------------------------------------------
     # VARIABLES DE LABORATORIO
     # --------------------------------------------------
     if usar_laboratorio:
         df_lab = st.session_state.df_laboratorio
-        cols_lab_num = df_lab.select_dtypes(include="number").columns.tolist()
-    
+        cols_lab_x = (
+            df_lab.select_dtypes(include="number").columns.tolist()
+            + df_lab.select_dtypes(include="datetime").columns.tolist()
+        )
+        
+        if len(cols_lab_x) < 1:
+            st.error("El laboratorio no tiene columnas numéricas ni de fecha.")
+            st.stop()
+        
         x_lab = st.selectbox(
             "Variable X laboratorio",
-            cols_lab_num,
+            cols_lab_x,
             key="x_lab"
         )
-    
+        
         y_lab = st.multiselect(
             "Variables Y laboratorio",
-            [c for c in cols_lab_num if c != x_lab],
+            [c for c in cols_lab_x if c != x_lab],
             key="y_lab"
         )
     else:
@@ -560,14 +580,25 @@ with tab2:
     # --------------------------------------------------
     # FILTRO POR X (USANDO CÁMARA DE REFERENCIA)
     # --------------------------------------------------
-    xmin = float(df_x_ref[x_var].min())
-    xmax = float(df_x_ref[x_var].max())
-
-    rx_min, rx_max = st.slider(
-        f"Rango para {x_var} (cámara {camara_x})",
-        xmin, xmax,
-        (xmin, xmax)
-    )
+    # ---- SLIDER SEGÚN TIPO DE X ----
+    if np.issubdtype(df_x_ref[x_var].dtype, np.datetime64):
+        xmin = df_x_ref[x_var].min()
+        xmax = df_x_ref[x_var].max()
+    
+        rx_min, rx_max = st.slider(
+            f"Rango para {x_var} (cámara {camara_x})",
+            xmin, xmax,
+            (xmin, xmax)
+        )
+    else:
+        xmin = float(df_x_ref[x_var].min())
+        xmax = float(df_x_ref[x_var].max())
+    
+        rx_min, rx_max = st.slider(
+            f"Rango para {x_var} (cámara {camara_x})",
+            xmin, xmax,
+            (xmin, xmax)
+        )
 
     # --------------------------------------------------
     # ESTADO DE EJES
