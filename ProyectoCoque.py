@@ -774,10 +774,10 @@ with tab2:
 # PESTAÑA 3 — VACÍA
 # ============================================================
 with tab3:
-    st.subheader("Análisis cuantitativo de correlaciones y selección de variables")
+    st.subheader("Correlaciones con datos filtrados y ranking de importancia")
 
     # =========================================================
-    # SELECCIÓN DE CÁMARA
+    # USO DE DATOS FILTRADOS
     # =========================================================
     if not st.session_state.df_camaras_activo:
         st.info("Cargue datos primero")
@@ -790,37 +790,35 @@ with tab3:
     )
 
     df = st.session_state.df_camaras_activo[camara]
+
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 2:
-        st.warning("No hay suficientes variables numéricas")
+        st.warning("No hay suficientes variables numéricas tras aplicar filtros")
         st.stop()
 
     # =========================================================
     # VARIABLE OBJETIVO
     # =========================================================
     y_obj = st.selectbox(
-        "Variable objetivo (Y)",
+        "Variable objetivo",
         cols_num,
         key="corr_y_obj"
     )
 
     X_cols = [c for c in cols_num if c != y_obj]
 
-    # =========================================================
-    # PREPARACIÓN DE DATOS
-    # =========================================================
-    df_corr_base = df[X_cols + [y_obj]].dropna()
+    df_base = df[X_cols + [y_obj]].dropna()
 
-    if len(df_corr_base) < 20:
-        st.warning("Datos insuficientes tras filtros/exclusiones")
+    if len(df_base) < 20:
+        st.warning("Datos insuficientes tras filtros y exclusiones")
         st.stop()
 
-    X = df_corr_base[X_cols]
-    y = df_corr_base[y_obj]
+    X = df_base[X_cols]
+    y = df_base[y_obj]
 
     # =========================================================
-    # CÁLCULO DE MÉTRICAS
+    # CÁLCULO DE MÉTRICAS DE CORRELACIÓN
     # =========================================================
     from sklearn.feature_selection import mutual_info_regression
     from sklearn.linear_model import LinearRegression
@@ -837,122 +835,126 @@ with tab3:
         model.fit(x_col, y)
         r2 = model.score(x_col, y)
 
-        pearson = df_corr_base[[col, y_obj]].corr().iloc[0, 1]
-        spearman = df_corr_base[[col, y_obj]].corr(method="spearman").iloc[0, 1]
+        pearson = df_base[[col, y_obj]].corr().iloc[0, 1]
+        spearman = df_base[[col, y_obj]].corr(method="spearman").iloc[0, 1]
 
         resultados.append({
             "Variable": col,
             "Pearson": pearson,
             "Spearman": spearman,
             "Mutual_Info": mi[i],
-            "R2_univariante": r2
+            "R2": r2
         })
 
-    df_resultados = (
-        pd.DataFrame(resultados)
-        .sort_values("Mutual_Info", ascending=False)
+    df_corr = pd.DataFrame(resultados)
+
+    # =========================================================
+    # NORMALIZACIÓN Y SCORE DE IMPORTANCIA
+    # =========================================================
+    def normalizar(s):
+        if s.max() == s.min():
+            return 0
+        return (s - s.min()) / (s.max() - s.min())
+
+    df_corr["Pearson_n"] = normalizar(df_corr["Pearson"].abs())
+    df_corr["Spearman_n"] = normalizar(df_corr["Spearman"].abs())
+    df_corr["MI_n"] = normalizar(df_corr["Mutual_Info"])
+    df_corr["R2_n"] = normalizar(df_corr["R2"])
+
+    df_corr["Score_importancia"] = (
+        df_corr["Pearson_n"]
+        + df_corr["Spearman_n"]
+        + df_corr["MI_n"]
+        + df_corr["R2_n"]
+    )
+
+    df_corr = (
+        df_corr
+        .sort_values("Score_importancia", ascending=False)
         .reset_index(drop=True)
     )
 
     # =========================================================
-    # TABLA DE CORRELACIONES
+    # TABLA CUANTITATIVA
     # =========================================================
-    st.markdown("### 📊 Métricas de correlación y dependencia")
+    st.markdown("### Métricas cuantitativas de correlación")
 
     st.dataframe(
-        df_resultados.style
-        .background_gradient(
+        df_corr[[
+            "Variable",
+            "Pearson",
+            "Spearman",
+            "Mutual_Info",
+            "R2",
+            "Score_importancia"
+        ]].style.background_gradient(
             cmap="RdYlGn",
-            subset=["Pearson", "Spearman", "Mutual_Info", "R2_univariante"]
+            subset=["Score_importancia"]
         ),
         use_container_width=True
     )
 
     # =========================================================
-    # CRITERIOS DE SELECCIÓN (UMBRAL INTERACTIVO)
+    # RANKING VISUAL DE IMPORTANCIA
     # =========================================================
-    st.markdown("### 🎯 Criterios de selección de variables")
+    st.markdown("### Ranking visual de importancia de correlación")
 
-    col1, col2, col3 = st.columns(3)
-
-    th_pearson = col1.slider(
-        "|Pearson| mínimo",
-        0.0, 1.0, 0.2,
-        key="corr_th_pearson"
+    fig_rank = px.bar(
+        df_corr,
+        x="Score_importancia",
+        y="Variable",
+        orientation="h",
+        title="Importancia relativa de cada variable respecto a la variable objetivo"
     )
 
-    th_mi = col2.slider(
-        "Mutual Info mínima",
-        0.0, float(df_resultados["Mutual_Info"].max()),
-        0.02,
-        key="corr_th_mi"
+    fig_rank.update_layout(
+        yaxis=dict(autorange="reversed"),
+        xaxis_title="Score de importancia (normalizado)",
+        yaxis_title=""
     )
 
-    th_r2 = col3.slider(
-        "R² mínimo",
-        0.0, 1.0, 0.05,
-        key="corr_th_r2"
+    st.plotly_chart(fig_rank, use_container_width=True)
+
+    # =========================================================
+    # IDENTIFICACIÓN DE LA VARIABLE MÁS RELEVANTE
+    # =========================================================
+    var_top = df_corr.iloc[0]
+
+    st.markdown(
+        f"La variable con mayor relación global con **{y_obj}** es "
+        f"**{var_top['Variable']}**."
     )
-
-    df_seleccion = df_resultados[
-        (df_resultados["Pearson"].abs() >= th_pearson) |
-        (df_resultados["Spearman"].abs() >= th_pearson) |
-        (df_resultados["Mutual_Info"] >= th_mi) |
-        (df_resultados["R2_univariante"] >= th_r2)
-    ]
-
-    # =========================================================
-    # VARIABLES SELECCIONADAS
-    # =========================================================
-    st.markdown("### ✅ Variables seleccionadas")
-
-    if df_seleccion.empty:
-        st.warning("Ninguna variable cumple los criterios actuales")
-    else:
-        st.dataframe(df_seleccion, use_container_width=True)
 
     # =========================================================
     # MAPA DE CALOR DE CORRELACIONES
     # =========================================================
-    st.markdown("### 🗺️ Mapa de calor de correlaciones (Spearman)")
+    st.markdown("### Mapa de calor de correlaciones (Spearman)")
 
-    corr_matrix = df_corr_base.corr(method="spearman")
+    corr_matrix = df_base.corr(method="spearman")
 
-    fig = px.imshow(
+    fig_heat = px.imshow(
         corr_matrix,
         color_continuous_scale="RdBu_r",
         zmin=-1,
         zmax=1
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig_heat, use_container_width=True)
 
     # =========================================================
-    # EXPORTACIÓN
+    # EXPORTACIÓN DE RESULTADOS
     # =========================================================
-    st.markdown("### 📥 Exportar resultados")
+    st.markdown("### Exportación de resultados")
 
-    csv_corr = df_resultados.to_csv(index=False).encode("utf-8")
-    csv_sel = df_seleccion.to_csv(index=False).encode("utf-8")
+    csv = df_corr.to_csv(index=False).encode("utf-8")
 
-    col1, col2 = st.columns(2)
-
-    col1.download_button(
-        "Descargar métricas completas",
-        data=csv_corr,
-        file_name=f"correlaciones_{camara}_{y_obj}.csv",
+    st.download_button(
+        "Descargar ranking de correlaciones",
+        data=csv,
+        file_name=f"ranking_correlaciones_{camara}_{y_obj}.csv",
         mime="text/csv",
-        key="corr_download_all"
+        key="corr_download"
     )
-
-    col2.download_button(
-        "Descargar variables seleccionadas",
-        data=csv_sel,
-        file_name=f"variables_seleccionadas_{camara}_{y_obj}.csv",
-        mime="text/csv",
-        key="corr_download_sel"
-    )
-
 # ============================================================
 # PESTAÑA 4 — VACÍA
 # ============================================================
