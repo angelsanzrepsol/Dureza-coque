@@ -773,167 +773,186 @@ with tab2:
 # ============================================================
 # PESTAÑA 3 — VACÍA
 # ============================================================
-with tab4:
-    st.subheader("Modelo multivariable + explicabilidad (SHAP)")
+with tab3:
+    st.subheader("Análisis cuantitativo de correlaciones y selección de variables")
 
     # =========================================================
-    # SELECCIÓN DE CÁMARA Y VARIABLES
+    # SELECCIÓN DE CÁMARA
     # =========================================================
+    if not st.session_state.df_camaras_activo:
+        st.info("Cargue datos primero")
+        st.stop()
+
     camara = st.selectbox(
         "Cámara",
-        st.session_state.df_camaras_activo.keys()
+        list(st.session_state.df_camaras_activo.keys()),
+        key="corr_camara"
     )
 
     df = st.session_state.df_camaras_activo[camara]
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
-    if len(cols_num) < 3:
+    if len(cols_num) < 2:
         st.warning("No hay suficientes variables numéricas")
         st.stop()
 
+    # =========================================================
+    # VARIABLE OBJETIVO
+    # =========================================================
     y_obj = st.selectbox(
         "Variable objetivo (Y)",
-        cols_num
+        cols_num,
+        key="corr_y_obj"
     )
 
-    X_cols = st.multiselect(
-        "Variables explicativas (X)",
-        [c for c in cols_num if c != y_obj],
-        default=[c for c in cols_num if c != y_obj][:5]
-    )
-
-    if len(X_cols) < 2:
-        st.warning("Seleccione al menos 2 variables explicativas")
-        st.stop()
+    X_cols = [c for c in cols_num if c != y_obj]
 
     # =========================================================
     # PREPARACIÓN DE DATOS
     # =========================================================
-    df_model = df[X_cols + [y_obj]].dropna()
+    df_corr_base = df[X_cols + [y_obj]].dropna()
 
-    if len(df_model) < 30:
+    if len(df_corr_base) < 20:
         st.warning("Datos insuficientes tras filtros/exclusiones")
         st.stop()
 
-    X = df_model[X_cols]
-    y = df_model[y_obj]
+    X = df_corr_base[X_cols]
+    y = df_corr_base[y_obj]
 
     # =========================================================
-    # ENTRENAMIENTO DEL MODELO
+    # CÁLCULO DE MÉTRICAS
     # =========================================================
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import r2_score, mean_absolute_error
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42
-    )
-
-    model = RandomForestRegressor(
-        n_estimators=300,
-        random_state=42,
-        n_jobs=-1
-    )
-
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
-    r2 = r2_score(y_test, y_pred)
-    mae = mean_absolute_error(y_test, y_pred)
-
-    # =========================================================
-    # MÉTRICAS
-    # =========================================================
-    col1, col2 = st.columns(2)
-    col1.metric("R² del modelo", f"{r2:.3f}")
-    col2.metric("Error absoluto medio", f"{mae:.3f}")
-
-    # =========================================================
-    # SHAP
-    # =========================================================
-    import shap
+    from sklearn.feature_selection import mutual_info_regression
+    from sklearn.linear_model import LinearRegression
     import numpy as np
 
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X)
+    mi = mutual_info_regression(X, y, random_state=42)
 
-    # =========================================================
-    # IMPORTANCIA GLOBAL SHAP
-    # =========================================================
-    shap_importancia = pd.DataFrame({
-        "Variable": X.columns,
-        "Importancia_SHAP": np.abs(shap_values).mean(axis=0)
-    }).sort_values("Importancia_SHAP", ascending=False)
+    resultados = []
 
-    st.markdown("### 🔥 Importancia global de variables (SHAP)")
-    st.bar_chart(
-        shap_importancia.set_index("Variable"),
-        use_container_width=True
+    for i, col in enumerate(X_cols):
+        x_col = X[col].values.reshape(-1, 1)
+
+        model = LinearRegression()
+        model.fit(x_col, y)
+        r2 = model.score(x_col, y)
+
+        pearson = df_corr_base[[col, y_obj]].corr().iloc[0, 1]
+        spearman = df_corr_base[[col, y_obj]].corr(method="spearman").iloc[0, 1]
+
+        resultados.append({
+            "Variable": col,
+            "Pearson": pearson,
+            "Spearman": spearman,
+            "Mutual_Info": mi[i],
+            "R2_univariante": r2
+        })
+
+    df_resultados = (
+        pd.DataFrame(resultados)
+        .sort_values("Mutual_Info", ascending=False)
+        .reset_index(drop=True)
     )
 
     # =========================================================
-    # DIRECCIÓN DEL EFECTO (SUBE / BAJA)
+    # TABLA DE CORRELACIONES
     # =========================================================
-    shap_direccion = pd.DataFrame({
-        "Variable": X.columns,
-        "Efecto_medio": shap_values.mean(axis=0)
-    }).sort_values("Efecto_medio", ascending=False)
-
-    st.markdown("### 📈 Dirección del efecto sobre la variable objetivo")
-    st.caption("Efecto positivo → aumenta Y | Efecto negativo → disminuye Y")
+    st.markdown("### 📊 Métricas de correlación y dependencia")
 
     st.dataframe(
-        shap_direccion.style
-        .background_gradient(cmap="RdBu", subset=["Efecto_medio"]),
+        df_resultados.style
+        .background_gradient(
+            cmap="RdYlGn",
+            subset=["Pearson", "Spearman", "Mutual_Info", "R2_univariante"]
+        ),
         use_container_width=True
     )
 
     # =========================================================
-    # SHAP SUMMARY PLOT (TODO EN UNA IMAGEN)
+    # CRITERIOS DE SELECCIÓN (UMBRAL INTERACTIVO)
     # =========================================================
-    import matplotlib.pyplot as plt
+    st.markdown("### 🎯 Criterios de selección de variables")
 
-    st.markdown("### 🧠 Mapa SHAP completo (importancia + dirección + dispersión)")
+    col1, col2, col3 = st.columns(3)
 
-    fig, ax = plt.subplots(figsize=(8, 6))
-    shap.summary_plot(
-        shap_values,
-        X,
-        show=False
+    th_pearson = col1.slider(
+        "|Pearson| mínimo",
+        0.0, 1.0, 0.2,
+        key="corr_th_pearson"
     )
-    st.pyplot(fig)
+
+    th_mi = col2.slider(
+        "Mutual Info mínima",
+        0.0, float(df_resultados["Mutual_Info"].max()),
+        0.02,
+        key="corr_th_mi"
+    )
+
+    th_r2 = col3.slider(
+        "R² mínimo",
+        0.0, 1.0, 0.05,
+        key="corr_th_r2"
+    )
+
+    df_seleccion = df_resultados[
+        (df_resultados["Pearson"].abs() >= th_pearson) |
+        (df_resultados["Spearman"].abs() >= th_pearson) |
+        (df_resultados["Mutual_Info"] >= th_mi) |
+        (df_resultados["R2_univariante"] >= th_r2)
+    ]
+
+    # =========================================================
+    # VARIABLES SELECCIONADAS
+    # =========================================================
+    st.markdown("### ✅ Variables seleccionadas")
+
+    if df_seleccion.empty:
+        st.warning("Ninguna variable cumple los criterios actuales")
+    else:
+        st.dataframe(df_seleccion, use_container_width=True)
 
     # =========================================================
     # MAPA DE CALOR DE CORRELACIONES
     # =========================================================
     st.markdown("### 🗺️ Mapa de calor de correlaciones (Spearman)")
 
-    corr = df_model.corr(method="spearman")
+    corr_matrix = df_corr_base.corr(method="spearman")
 
-    fig_corr = px.imshow(
-        corr,
+    fig = px.imshow(
+        corr_matrix,
         color_continuous_scale="RdBu_r",
         zmin=-1,
         zmax=1
     )
 
-    st.plotly_chart(fig_corr, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
     # =========================================================
-    # RESUMEN AUTOMÁTICO (LECTURA RÁPIDA)
+    # EXPORTACIÓN
     # =========================================================
-    st.markdown("### 🧾 Resumen interpretativo")
+    st.markdown("### 📥 Exportar resultados")
 
-    top_up = shap_direccion.head(3)
-    top_down = shap_direccion.tail(3)
+    csv_corr = df_resultados.to_csv(index=False).encode("utf-8")
+    csv_sel = df_seleccion.to_csv(index=False).encode("utf-8")
 
-    st.markdown("**Variables que TIENDEN A AUMENTAR la variable objetivo:**")
-    for _, r in top_up.iterrows():
-        st.write(f"⬆️ {r['Variable']}")
+    col1, col2 = st.columns(2)
 
-    st.markdown("**Variables que TIENDEN A DISMINUIR la variable objetivo:**")
-    for _, r in top_down.iterrows():
-        st.write(f"⬇️ {r['Variable']}")
+    col1.download_button(
+        "Descargar métricas completas",
+        data=csv_corr,
+        file_name=f"correlaciones_{camara}_{y_obj}.csv",
+        mime="text/csv",
+        key="corr_download_all"
+    )
+
+    col2.download_button(
+        "Descargar variables seleccionadas",
+        data=csv_sel,
+        file_name=f"variables_seleccionadas_{camara}_{y_obj}.csv",
+        mime="text/csv",
+        key="corr_download_sel"
+    )
+
 # ============================================================
 # PESTAÑA 4 — VACÍA
 # ============================================================
