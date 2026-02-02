@@ -774,10 +774,10 @@ with tab2:
 # PESTAÑA 3 — VACÍA
 # ============================================================
 with tab3:
-    st.subheader("Correlaciones con datos filtrados y ranking de importancia")
+    st.subheader("Correlaciones con datos filtrados y ranking configurable")
 
     # =========================================================
-    # USO DE DATOS FILTRADOS
+    # DATOS FILTRADOS
     # =========================================================
     if not st.session_state.df_camaras_activo:
         st.info("Cargue datos primero")
@@ -790,7 +790,6 @@ with tab3:
     )
 
     df = st.session_state.df_camaras_activo[camara]
-
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 2:
@@ -806,8 +805,27 @@ with tab3:
         key="corr_y_obj"
     )
 
-    X_cols = [c for c in cols_num if c != y_obj]
+    # =========================================================
+    # EXCLUSIÓN DE VARIABLES
+    # =========================================================
+    posibles_x = [c for c in cols_num if c != y_obj]
 
+    vars_excluidas = st.multiselect(
+        "Variables a excluir del análisis",
+        posibles_x,
+        default=[],
+        key="corr_vars_excluidas"
+    )
+
+    X_cols = [c for c in posibles_x if c not in vars_excluidas]
+
+    if len(X_cols) < 1:
+        st.warning("No quedan variables para analizar tras la exclusión")
+        st.stop()
+
+    # =========================================================
+    # PREPARACIÓN DE DATOS
+    # =========================================================
     df_base = df[X_cols + [y_obj]].dropna()
 
     if len(df_base) < 20:
@@ -818,7 +836,7 @@ with tab3:
     y = df_base[y_obj]
 
     # =========================================================
-    # CÁLCULO DE MÉTRICAS DE CORRELACIÓN
+    # CÁLCULO DE MÉTRICAS
     # =========================================================
     from sklearn.feature_selection import mutual_info_regression
     from sklearn.linear_model import LinearRegression
@@ -875,12 +893,30 @@ with tab3:
     )
 
     # =========================================================
+    # SELECTOR DE TOP N
+    # =========================================================
+    st.markdown("### Configuración del ranking")
+
+    opcion_top = st.selectbox(
+        "Mostrar ranking",
+        ["Completo", "Top 5", "Top 10"],
+        key="corr_top_selector"
+    )
+
+    if opcion_top == "Top 5":
+        df_rank = df_corr.head(5)
+    elif opcion_top == "Top 10":
+        df_rank = df_corr.head(10)
+    else:
+        df_rank = df_corr.copy()
+
+    # =========================================================
     # TABLA CUANTITATIVA
     # =========================================================
     st.markdown("### Métricas cuantitativas de correlación")
 
     st.dataframe(
-        df_corr[[
+        df_rank[[
             "Variable",
             "Pearson",
             "Spearman",
@@ -895,16 +931,16 @@ with tab3:
     )
 
     # =========================================================
-    # RANKING VISUAL DE IMPORTANCIA
+    # RANKING VISUAL
     # =========================================================
     st.markdown("### Ranking visual de importancia de correlación")
 
     fig_rank = px.bar(
-        df_corr,
+        df_rank,
         x="Score_importancia",
         y="Variable",
         orientation="h",
-        title="Importancia relativa de cada variable respecto a la variable objetivo"
+        title="Importancia relativa de las variables respecto a la variable objetivo"
     )
 
     fig_rank.update_layout(
@@ -916,13 +952,13 @@ with tab3:
     st.plotly_chart(fig_rank, use_container_width=True)
 
     # =========================================================
-    # IDENTIFICACIÓN DE LA VARIABLE MÁS RELEVANTE
+    # VARIABLE MÁS RELEVANTE (TRAS EXCLUSIONES)
     # =========================================================
     var_top = df_corr.iloc[0]
 
     st.markdown(
         f"La variable con mayor relación global con **{y_obj}** es "
-        f"**{var_top['Variable']}**."
+        f"**{var_top['Variable']}**, considerando las exclusiones aplicadas."
     )
 
     # =========================================================
@@ -942,19 +978,20 @@ with tab3:
     st.plotly_chart(fig_heat, use_container_width=True)
 
     # =========================================================
-    # EXPORTACIÓN DE RESULTADOS
+    # EXPORTACIÓN
     # =========================================================
     st.markdown("### Exportación de resultados")
 
     csv = df_corr.to_csv(index=False).encode("utf-8")
 
     st.download_button(
-        "Descargar ranking de correlaciones",
+        "Descargar ranking completo",
         data=csv,
         file_name=f"ranking_correlaciones_{camara}_{y_obj}.csv",
         mime="text/csv",
         key="corr_download"
     )
+
 # ============================================================
 # PESTAÑA 4 — VACÍA
 # ============================================================
