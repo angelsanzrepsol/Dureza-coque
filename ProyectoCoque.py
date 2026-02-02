@@ -773,8 +773,167 @@ with tab2:
 # ============================================================
 # PESTAÑA 3 — VACÍA
 # ============================================================
-with tab3:
-    pass
+with tab4:
+    st.subheader("Modelo multivariable + explicabilidad (SHAP)")
+
+    # =========================================================
+    # SELECCIÓN DE CÁMARA Y VARIABLES
+    # =========================================================
+    camara = st.selectbox(
+        "Cámara",
+        st.session_state.df_camaras_activo.keys()
+    )
+
+    df = st.session_state.df_camaras_activo[camara]
+    cols_num = df.select_dtypes(include="number").columns.tolist()
+
+    if len(cols_num) < 3:
+        st.warning("No hay suficientes variables numéricas")
+        st.stop()
+
+    y_obj = st.selectbox(
+        "Variable objetivo (Y)",
+        cols_num
+    )
+
+    X_cols = st.multiselect(
+        "Variables explicativas (X)",
+        [c for c in cols_num if c != y_obj],
+        default=[c for c in cols_num if c != y_obj][:5]
+    )
+
+    if len(X_cols) < 2:
+        st.warning("Seleccione al menos 2 variables explicativas")
+        st.stop()
+
+    # =========================================================
+    # PREPARACIÓN DE DATOS
+    # =========================================================
+    df_model = df[X_cols + [y_obj]].dropna()
+
+    if len(df_model) < 30:
+        st.warning("Datos insuficientes tras filtros/exclusiones")
+        st.stop()
+
+    X = df_model[X_cols]
+    y = df_model[y_obj]
+
+    # =========================================================
+    # ENTRENAMIENTO DEL MODELO
+    # =========================================================
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import r2_score, mean_absolute_error
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.25, random_state=42
+    )
+
+    model = RandomForestRegressor(
+        n_estimators=300,
+        random_state=42,
+        n_jobs=-1
+    )
+
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    r2 = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+
+    # =========================================================
+    # MÉTRICAS
+    # =========================================================
+    col1, col2 = st.columns(2)
+    col1.metric("R² del modelo", f"{r2:.3f}")
+    col2.metric("Error absoluto medio", f"{mae:.3f}")
+
+    # =========================================================
+    # SHAP
+    # =========================================================
+    import shap
+    import numpy as np
+
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+
+    # =========================================================
+    # IMPORTANCIA GLOBAL SHAP
+    # =========================================================
+    shap_importancia = pd.DataFrame({
+        "Variable": X.columns,
+        "Importancia_SHAP": np.abs(shap_values).mean(axis=0)
+    }).sort_values("Importancia_SHAP", ascending=False)
+
+    st.markdown("### 🔥 Importancia global de variables (SHAP)")
+    st.bar_chart(
+        shap_importancia.set_index("Variable"),
+        use_container_width=True
+    )
+
+    # =========================================================
+    # DIRECCIÓN DEL EFECTO (SUBE / BAJA)
+    # =========================================================
+    shap_direccion = pd.DataFrame({
+        "Variable": X.columns,
+        "Efecto_medio": shap_values.mean(axis=0)
+    }).sort_values("Efecto_medio", ascending=False)
+
+    st.markdown("### 📈 Dirección del efecto sobre la variable objetivo")
+    st.caption("Efecto positivo → aumenta Y | Efecto negativo → disminuye Y")
+
+    st.dataframe(
+        shap_direccion.style
+        .background_gradient(cmap="RdBu", subset=["Efecto_medio"]),
+        use_container_width=True
+    )
+
+    # =========================================================
+    # SHAP SUMMARY PLOT (TODO EN UNA IMAGEN)
+    # =========================================================
+    import matplotlib.pyplot as plt
+
+    st.markdown("### 🧠 Mapa SHAP completo (importancia + dirección + dispersión)")
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    shap.summary_plot(
+        shap_values,
+        X,
+        show=False
+    )
+    st.pyplot(fig)
+
+    # =========================================================
+    # MAPA DE CALOR DE CORRELACIONES
+    # =========================================================
+    st.markdown("### 🗺️ Mapa de calor de correlaciones (Spearman)")
+
+    corr = df_model.corr(method="spearman")
+
+    fig_corr = px.imshow(
+        corr,
+        color_continuous_scale="RdBu_r",
+        zmin=-1,
+        zmax=1
+    )
+
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+    # =========================================================
+    # RESUMEN AUTOMÁTICO (LECTURA RÁPIDA)
+    # =========================================================
+    st.markdown("### 🧾 Resumen interpretativo")
+
+    top_up = shap_direccion.head(3)
+    top_down = shap_direccion.tail(3)
+
+    st.markdown("**Variables que TIENDEN A AUMENTAR la variable objetivo:**")
+    for _, r in top_up.iterrows():
+        st.write(f"⬆️ {r['Variable']}")
+
+    st.markdown("**Variables que TIENDEN A DISMINUIR la variable objetivo:**")
+    for _, r in top_down.iterrows():
+        st.write(f"⬇️ {r['Variable']}")
 # ============================================================
 # PESTAÑA 4 — VACÍA
 # ============================================================

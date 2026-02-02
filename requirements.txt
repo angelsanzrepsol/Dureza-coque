@@ -6,7 +6,7 @@ matplotlib
 Pillow
 openpyxl
 scikit-learn
-shap
+shap==0.44.1
 lime
 xgboost
 xlsxwriter
