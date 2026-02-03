@@ -413,7 +413,11 @@ with tab_filtros:
                     st.warning(f"La cámara {camara_filtro} no está cargada actualmente")
                     continue
                 
-                df_original = st.session_state.df_camaras_original[camara_filtro]
+                df_original = st.session_state.df_camaras_original.get(camara_filtro)
+                if df_original is None:
+                    st.warning(f"La cámara {camara_filtro} no está cargada actualmente")
+                    continue
+
 
                 cols_num = df_original.select_dtypes(include="number").columns.tolist()
     
