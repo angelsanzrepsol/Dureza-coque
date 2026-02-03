@@ -277,6 +277,20 @@ with tab1:
         "Cámara",
         st.session_state.df_camaras_original.keys()
     )
+    st.markdown("### Variables a excluir completamente")
+
+    df_original = st.session_state.df_camaras_original[camara]
+    
+    cols_num_original = df_original.select_dtypes(include="number").columns.tolist()
+    
+    vars_excluir = st.multiselect(
+        "Seleccionar variables a excluir del filtro",
+        cols_num_original,
+        default=st.session_state.variables_excluidas_global.get(camara, []),
+        key=f"vg_vars_excluir_{camara}"
+    )
+    
+    st.session_state.variables_excluidas_global[camara] = vars_excluir
 
     df = st.session_state.df_camaras_activo[camara]
 
@@ -325,6 +339,7 @@ with tab1:
 # PESTAÑA — FILTROS GUARDADOS
 # ============================================================
 with tab_filtros:
+
 
     st.subheader("Filtros guardados")
 
@@ -856,20 +871,6 @@ with tab3:
         list(st.session_state.df_camaras_activo.keys()),
         key="corr_camara"
     )
-    st.markdown("### Variables a excluir completamente")
-
-    df_original = st.session_state.df_camaras_original[camara]
-    
-    cols_num_original = df_original.select_dtypes(include="number").columns.tolist()
-    
-    vars_excluir = st.multiselect(
-        "Seleccionar variables a excluir del filtro",
-        cols_num_original,
-        default=st.session_state.variables_excluidas_global.get(camara, []),
-        key=f"vg_vars_excluir_{camara}"
-    )
-    
-    st.session_state.variables_excluidas_global[camara] = vars_excluir
 
     df = aplicar_exclusion_variables(
     st.session_state.df_camaras_activo[camara],
