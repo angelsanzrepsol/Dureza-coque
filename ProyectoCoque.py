@@ -123,6 +123,11 @@ def extraer_codigo_camara(nombre_archivo):
     match = re.search(r"C\d{4}[A-Z]", nombre_archivo.upper())
     return match.group(0) if match else None
 
+def aplicar_exclusion_variables(df, camara):
+    excluidas = st.session_state.variables_excluidas_global.get(camara, [])
+    return df.drop(columns=[c for c in excluidas if c in df.columns])
+
+
 # ============================================================
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
 # ============================================================
@@ -145,6 +150,9 @@ if "df_camaras_activo" not in st.session_state:
 
 if "df_camaras_eliminados" not in st.session_state:
     st.session_state.df_camaras_eliminados = {}
+if "variables_excluidas_global" not in st.session_state:
+    st.session_state.variables_excluidas_global = {}
+
 # ===============================
 # ESTADOS PARA FILTROS GUARDADOS
 # ===============================
@@ -195,6 +203,7 @@ if uploaded_files:
             st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(
                 columns=df.columns
             )
+            st.session_state.variables_excluidas_global[camara] = []
 
             st.sidebar.success(
                 f"Cargado {nombre}\nCámara detectada: {camara}"
@@ -240,7 +249,7 @@ with tab1:
         st.session_state.df_camaras_original.keys()
     )
 
-    df = st.session_state.df_camaras_original[camara]
+    df = st.session_state.df_camaras_activo[camara]
     cols = df.select_dtypes(include="number").columns.tolist()
 
     x_var = st.selectbox("Variable base (X)", cols)
@@ -275,13 +284,38 @@ with tab1:
             st.session_state.filtros_guardados[nombre_filtro] = {
                 "camara": camara,
                 "x_var": x_var,
-                "rangos": filtros_temp
+                "rangos": filtros_temp,
+                "variables_excluidas": st.session_state.variables_excluidas_global.get(camara, [])
             }
+
             st.success(f"Filtro '{nombre_filtro}' guardado")
 # ============================================================
 # PESTAÑA — FILTROS GUARDADOS
 # ============================================================
 with tab_filtros:
+    st.markdown("### Exclusión global de variables")
+
+    if not st.session_state.df_camaras_original:
+        st.stop()
+    
+    camara_vars = st.selectbox(
+        "Seleccionar cámara para excluir variables",
+        st.session_state.df_camaras_original.keys(),
+        key="global_excluir_camara"
+    )
+    
+    df_cam_original = st.session_state.df_camaras_original[camara_vars]
+    cols_num = df_cam_original.select_dtypes(include="number").columns.tolist()
+    
+    vars_excluir = st.multiselect(
+        "Variables a excluir completamente del análisis",
+        cols_num,
+        default=st.session_state.variables_excluidas_global.get(camara_vars, []),
+        key=f"vars_excluir_global_{camara_vars}"
+    )
+    
+    st.session_state.variables_excluidas_global[camara_vars] = vars_excluir
+
     st.subheader("Filtros guardados")
 
     # --------------------------------------------------
@@ -363,6 +397,7 @@ with tab_filtros:
                             st.session_state.filtros_activos.discard(n)
                 
                     st.session_state.filtros_activos.add(nombre)
+                    st.session_state.variables_excluidas_global[camara_filtro] = f.get("variables_excluidas", [])
                 else:
                     st.session_state.filtros_activos.discard(nombre)
 
@@ -828,7 +863,10 @@ with tab3:
         key="corr_camara"
     )
 
-    df = st.session_state.df_camaras_activo[camara]
+    df = aplicar_exclusion_variables(
+    st.session_state.df_camaras_activo[camara],
+    camara
+)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 2:
@@ -1050,7 +1088,10 @@ with tab4:
         key="model_cmp_camara"
     )
 
-    df = st.session_state.df_camaras_activo[camara]
+    df = aplicar_exclusion_variables(
+    st.session_state.df_camaras_activo[camara],
+    camara
+)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 3:
@@ -1299,7 +1340,10 @@ with tab5:
         key="sim_camara"
     )
 
-    df = st.session_state.df_camaras_activo[camara]
+    df = aplicar_exclusion_variables(
+    st.session_state.df_camaras_activo[camara],
+    camara
+)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     # =========================================================
