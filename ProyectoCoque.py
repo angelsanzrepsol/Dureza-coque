@@ -405,9 +405,16 @@ with tab_filtros:
     
                 st.markdown("### Editar variables excluidas en este filtro")
     
-                camara_filtro = f["camara"]
-    
+                camara_filtro = f.get("camara")
+
+                # Verificar que la cámara existe
+                if camara_filtro not in st.session_state.df_camaras_original:
+                
+                    st.warning(f"La cámara {camara_filtro} no está cargada actualmente")
+                    continue
+                
                 df_original = st.session_state.df_camaras_original[camara_filtro]
+
                 cols_num = df_original.select_dtypes(include="number").columns.tolist()
     
                 vars_actuales = f.get("variables_excluidas", [])
