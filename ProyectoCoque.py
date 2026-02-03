@@ -465,7 +465,23 @@ with tab2:
     # SELECCIÓN DE Y POR CÁMARA
     # --------------------------------------------------
     st.markdown("### Selección de variables Y por cámara")
-
+    # =====================================================
+    # VARIABLE PARA GRADIENTE DE COLOR
+    # =====================================================
+    st.markdown("### Variable para colorear los puntos")
+    
+    vars_color_posibles = cols_num_x.copy()
+    vars_color_posibles.insert(0, "(ninguna)")
+    
+    color_var = st.selectbox(
+        "Variable para gradiente de color",
+        vars_color_posibles,
+        key="graf_color_var"
+    )
+    
+    if color_var == "(ninguna)":
+        color_var = None
+    
     y_vars_por_camara = {}
 
     for camara in camaras_sel:
@@ -610,15 +626,38 @@ with tab2:
             
             st.session_state.datos_descarga_tab2[camara].append(df_export)
 
-            fig.add_trace(
-                go.Scatter(
-                    x=df_y[x_var] if x_var in df_y.columns else df_y.index,
-                    y=df_y[y],
-                    mode="markers",
-                    name=f"{camara} – {y}",
-                    customdata=[(camara, i) for i in df_y.index]
+            # --------------------------------------------------
+            # SCATTER CON GRADIENTE DE COLOR
+            # --------------------------------------------------
+            if color_var and color_var in df_y.columns:
+            
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_y[x_var] if x_var in df_y.columns else df_y.index,
+                        y=df_y[y],
+                        mode="markers",
+                        name=f"{camara} – {y}",
+                        marker=dict(
+                            color=df_y[color_var],
+                            colorscale="Viridis",
+                            showscale=True,
+                            colorbar=dict(title=color_var)
+                        ),
+                        customdata=[(camara, i) for i in df_y.index]
+                    )
                 )
-            )
+            
+            else:
+            
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_y[x_var] if x_var in df_y.columns else df_y.index,
+                        y=df_y[y],
+                        mode="markers",
+                        name=f"{camara} – {y}",
+                        customdata=[(camara, i) for i in df_y.index]
+                    )
+                )
 
             # Regresión lineal independiente
             if x_var in df_y.columns and len(df_y) >= 2:
@@ -1245,4 +1284,216 @@ with tab4:
 # PESTAÑA 5 — VACÍA
 # ============================================================
 with tab5:
-    pass
+    st.subheader("Simulador de operación basado en Machine Learning")
+
+    # =========================================================
+    # DATOS FILTRADOS
+    # =========================================================
+    if not st.session_state.df_camaras_activo:
+        st.info("Cargue datos primero")
+        st.stop()
+
+    camara = st.selectbox(
+        "Cámara",
+        list(st.session_state.df_camaras_activo.keys()),
+        key="sim_camara"
+    )
+
+    df = st.session_state.df_camaras_activo[camara]
+    cols_num = df.select_dtypes(include="number").columns.tolist()
+
+    # =========================================================
+    # VARIABLE OBJETIVO
+    # =========================================================
+    y_obj = st.selectbox(
+        "Variable objetivo a simular",
+        cols_num,
+        key="sim_y"
+    )
+
+    # =========================================================
+    # SELECCIÓN DE VARIABLES TOP N
+    # =========================================================
+    opcion_vars = st.selectbox(
+        "Variables explicativas",
+        ["Top 5", "Top 10", "Top 15", "Todas"],
+        index=1,
+        key="sim_top"
+    )
+
+    posibles_x = [c for c in cols_num if c != y_obj]
+
+    # =========================================================
+    # RANKING DE VARIABLES
+    # =========================================================
+    from sklearn.feature_selection import mutual_info_regression
+    from sklearn.linear_model import LinearRegression
+    import numpy as np
+
+    df_rank_base = df[posibles_x + [y_obj]].dropna()
+
+    X_rank = df_rank_base[posibles_x]
+    y_rank = df_rank_base[y_obj]
+
+    mi = mutual_info_regression(X_rank, y_rank, random_state=42)
+
+    ranking = []
+
+    for i, col in enumerate(posibles_x):
+        lr = LinearRegression().fit(X_rank[[col]], y_rank)
+
+        ranking.append({
+            "Variable": col,
+            "Score": (
+                abs(df_rank_base[[col, y_obj]].corr().iloc[0, 1])
+                + abs(df_rank_base[[col, y_obj]].corr(method="spearman").iloc[0, 1])
+                + mi[i]
+                + lr.score(X_rank[[col]], y_rank)
+            )
+        })
+
+    df_rank = pd.DataFrame(ranking).sort_values("Score", ascending=False)
+
+    if opcion_vars == "Top 5":
+        X_cols = df_rank.head(5)["Variable"].tolist()
+    elif opcion_vars == "Top 10":
+        X_cols = df_rank.head(10)["Variable"].tolist()
+    elif opcion_vars == "Top 15":
+        X_cols = df_rank.head(15)["Variable"].tolist()
+    else:
+        X_cols = df_rank["Variable"].tolist()
+
+    # =========================================================
+    # EXCLUSIÓN MANUAL
+    # =========================================================
+    vars_excluir = st.multiselect(
+        "Excluir variables del simulador",
+        X_cols,
+        default=[],
+        key="sim_excluir"
+    )
+
+    X_cols = [v for v in X_cols if v not in vars_excluir]
+
+    if len(X_cols) == 0:
+        st.warning("No quedan variables para simular")
+        st.stop()
+
+    st.write("Variables utilizadas:", X_cols)
+
+    # =========================================================
+    # ENTRENAMIENTO DEL MEJOR MODELO
+    # =========================================================
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import r2_score
+    from sklearn.ensemble import (
+        RandomForestRegressor,
+        GradientBoostingRegressor,
+        HistGradientBoostingRegressor
+    )
+
+    df_model = df[X_cols + [y_obj]].dropna()
+
+    X = df_model[X_cols]
+    y = df_model[y_obj]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.25,
+        random_state=42
+    )
+
+    modelos = {
+        "RF": RandomForestRegressor(n_estimators=300, random_state=42),
+        "GB": GradientBoostingRegressor(random_state=42),
+        "HGB": HistGradientBoostingRegressor(random_state=42)
+    }
+
+    mejor_modelo = None
+    mejor_r2 = -999
+
+    for nombre, m in modelos.items():
+        m.fit(X_train, y_train)
+        r2 = r2_score(y_test, m.predict(X_test))
+
+        if r2 > mejor_r2:
+            mejor_r2 = r2
+            mejor_modelo = m
+
+    st.success(f"Modelo seleccionado automáticamente (R² = {mejor_r2:.3f})")
+
+    # =========================================================
+    # SLIDERS DE SIMULACIÓN
+    # =========================================================
+    st.markdown("### Ajuste de variables operativas")
+
+    entrada_usuario = {}
+
+    for col in X_cols:
+        min_v = float(df[col].min())
+        max_v = float(df[col].max())
+        mean_v = float(df[col].mean())
+
+        entrada_usuario[col] = st.slider(
+            col,
+            min_v,
+            max_v,
+            mean_v,
+            key=f"sim_slider_{col}"
+        )
+
+    entrada_df = pd.DataFrame([entrada_usuario])
+
+    # =========================================================
+    # PREDICCIÓN
+    # =========================================================
+    pred = mejor_modelo.predict(entrada_df)[0]
+
+    st.metric("Predicción de la variable objetivo", f"{pred:.3f}")
+
+    # =========================================================
+    # COMPARACIÓN CON MEDIDA REAL
+    # =========================================================
+    valor_real = st.number_input(
+        "Introducir valor real medido (opcional)",
+        value=0.0,
+        key="sim_valor_real"
+    )
+
+    if valor_real != 0:
+        error = pred - valor_real
+        st.metric("Error de predicción", f"{error:.3f}")
+
+    # =========================================================
+    # POSICIÓN DENTRO DEL HISTÓRICO
+    # =========================================================
+    hist_min = df[y_obj].min()
+    hist_max = df[y_obj].max()
+
+    st.markdown("### Posición dentro del histórico")
+
+    st.progress(
+        float((pred - hist_min) / (hist_max - hist_min))
+    )
+
+    # =========================================================
+    # GRÁFICA COMPARATIVA
+    # =========================================================
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Box(
+        y=df[y_obj],
+        name="Histórico"
+    ))
+
+    fig.add_trace(go.Scatter(
+        y=[pred],
+        x=["Predicción"],
+        mode="markers",
+        marker=dict(size=12, color="red"),
+        name="Predicción"
+    ))
+
+    st.plotly_chart(fig, use_container_width=True)
