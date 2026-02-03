@@ -1098,8 +1098,25 @@ with tab4:
     
     else:
         X_cols = df_rank["Variable"].tolist()
-        
+    # =========================================================
+    # EXCLUSIÓN MANUAL DE VARIABLES
+    # =========================================================
+    vars_excluir_modelo = st.multiselect(
+        "Excluir variables del modelo",
+        X_cols,
+        default=[],
+        key="model_vars_excluir"
+    )
+    
+    # Aplicar exclusión
+    X_cols = [v for v in X_cols if v not in vars_excluir_modelo]
+    
+    if len(X_cols) == 0:
+        st.warning("No quedan variables explicativas tras la exclusión")
+        st.stop()
+
     st.write(f"Número de variables utilizadas: {len(X_cols)}")
+    st.write("Variables finales del modelo:", X_cols)
 
     # =========================================================
     # PREPARACIÓN FINAL DE DATOS
