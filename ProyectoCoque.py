@@ -127,7 +127,36 @@ def aplicar_exclusion_variables(df, camara):
     excluidas = st.session_state.variables_excluidas_global.get(camara, [])
     return df.drop(columns=[c for c in excluidas if c in df.columns])
 
+def aplicar_filtros_activos(df, camara):
+    """
+    Aplica los rangos de los filtros activos al dataframe de una cámara.
+    """
 
+    # Si no hay filtros activos, devuelve el dataframe tal cual
+    if "filtros_activos" not in st.session_state:
+        return df
+
+    if not st.session_state.filtros_activos:
+        return df
+
+    # Recorrer todos los filtros activos
+    for nombre in st.session_state.filtros_activos:
+
+        # Obtener el filtro guardado
+        f = st.session_state.filtros_guardados.get(nombre, {})
+
+        # Comprobar que el filtro pertenece a esta cámara
+        if f.get("camara") != camara:
+            continue
+
+        # Aplicar rangos del filtro
+        rangos = f.get("rangos", {})
+
+        for variable, (vmin, vmax) in rangos.items():
+            if variable in df.columns:
+                df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
+
+    return df
 # ============================================================
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
 # ============================================================
@@ -250,6 +279,10 @@ with tab1:
     )
 
     df = st.session_state.df_camaras_activo[camara]
+
+    df = aplicar_exclusion_variables(df, camara)
+    
+    df = aplicar_filtros_activos(df, camara)
     cols = df.select_dtypes(include="number").columns.tolist()
 
     x_var = st.selectbox("Variable base (X)", cols)
@@ -280,15 +313,14 @@ with tab1:
     nombre_filtro = st.text_input("Nombre del filtro")
 
     if st.button("Guardar filtro"):
-        if nombre_filtro:
-            st.session_state.filtros_guardados[nombre_filtro] = {
-                "camara": camara,
-                "x_var": x_var,
-                "rangos": filtros_temp,
-                "variables_excluidas": st.session_state.variables_excluidas_global.get(camara, [])
-            }
+        st.session_state.filtros_guardados[nombre_filtro] = {
+            "camara": camara,
+            "x_var": x_var,
+            "rangos": filtros_temp,
+            "variables_excluidas": st.session_state.variables_excluidas_global.get(camara, [])
+        }
 
-            st.success(f"Filtro '{nombre_filtro}' guardado")
+        st.success(f"Filtro '{nombre_filtro}' guardado")
 # ============================================================
 # PESTAÑA — FILTROS GUARDADOS
 # ============================================================
@@ -471,7 +503,12 @@ with tab2:
         camaras_sel
     )
 
-    df_x_ref = df_camaras_activo[camara_x]
+    df_x_ref = aplicar_exclusion_variables(
+        df_camaras_activo[camara_x],
+        camara_x
+    )
+    
+    df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
     cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num_x) < 1:
@@ -520,7 +557,13 @@ with tab2:
     y_vars_por_camara = {}
 
     for camara in camaras_sel:
-        df_cam = df_camaras_activo[camara]
+        df_cam = aplicar_exclusion_variables(
+            df_camaras_activo[camara],
+            camara
+        )
+    
+        df_cam = aplicar_filtros_activos(df_cam, camara)
+
         cols_cam = df_cam.select_dtypes(include="number").columns.tolist()
 
         y_sel = st.multiselect(
@@ -572,29 +615,6 @@ with tab2:
 
     if "axis_limits_tab2" not in st.session_state:
         st.session_state.axis_limits_tab2 = {}
-    # --------------------------------------------------
-    # APLICAR FILTROS ACTIVOS
-    # --------------------------------------------------
-    for nombre in st.session_state.filtros_activos:
-    
-        f = st.session_state.filtros_guardados[nombre]
-    
-        camara_filtro = f["camara"]
-    
-        # Solo si la cámara está seleccionada
-        if camara_filtro in camaras_sel:
-    
-            df = df_camaras_activo[camara_filtro]
-    
-            # Comprobar X
-            if f["x_var"] != x_var:
-                continue
-    
-            for var, (vmin, vmax) in f["rangos"].items():
-                if var in df.columns:
-                    df = df[(df[var] >= vmin) & (df[var] <= vmax)]
-    
-            df_camaras_activo[camara_filtro] = df
 
     # --------------------------------------------------
     # GRÁFICO
@@ -602,22 +622,18 @@ with tab2:
     # --------------------------------------------------
     # APLICAR FILTRO GUARDADO
     # --------------------------------------------------
-    if st.session_state.filtro_activo:
-        f = st.session_state.filtros_guardados[st.session_state.filtro_activo]
-    
-        if f["camara"] == camara_x and f["x_var"] == x_var:
-            for cam in camaras_sel:
-                df = df_camaras_activo[cam]
-                for var, (vmin, vmax) in f["rangos"].items():
-                    if var in df.columns:
-                        df = df[(df[var] >= vmin) & (df[var] <= vmax)]
-                df_camaras_activo[cam] = df
 
     fig = go.Figure()
     st.session_state.datos_descarga_tab2 = {}
 
     for camara, y_vars in y_vars_por_camara.items():
-        df_cam = df_camaras_activo[camara]
+
+        df_cam = aplicar_exclusion_variables(
+            df_camaras_activo[camara],
+            camara
+        )
+    
+        df_cam = aplicar_filtros_activos(df_cam, camara)
         st.session_state.datos_descarga_tab2[camara] = []
 
         # Filtrado por X usando valores de ESA cámara
@@ -867,6 +883,7 @@ with tab3:
     st.session_state.df_camaras_activo[camara],
     camara
 )
+    df = aplicar_filtros_activos(df, camara)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 2:
@@ -1092,6 +1109,7 @@ with tab4:
     st.session_state.df_camaras_activo[camara],
     camara
 )
+    df = aplicar_filtros_activos(df, camara)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     if len(cols_num) < 3:
@@ -1344,6 +1362,7 @@ with tab5:
     st.session_state.df_camaras_activo[camara],
     camara
 )
+    df = aplicar_filtros_activos(df, camara)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
     # =========================================================
