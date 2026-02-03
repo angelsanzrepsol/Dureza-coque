@@ -996,7 +996,223 @@ with tab3:
 # PESTAÑA 4 — VACÍA
 # ============================================================
 with tab4:
-    pass
+    st.subheader("Modelo predictivo: comparación de algoritmos de Machine Learning")
+
+    # =========================================================
+    # DATOS FILTRADOS
+    # =========================================================
+    if not st.session_state.df_camaras_activo:
+        st.info("Cargue datos primero")
+        st.stop()
+
+    camara = st.selectbox(
+        "Cámara",
+        list(st.session_state.df_camaras_activo.keys()),
+        key="model_cmp_camara"
+    )
+
+    df = st.session_state.df_camaras_activo[camara]
+    cols_num = df.select_dtypes(include="number").columns.tolist()
+
+    if len(cols_num) < 3:
+        st.warning("No hay suficientes variables numéricas")
+        st.stop()
+
+    # =========================================================
+    # VARIABLE OBJETIVO
+    # =========================================================
+    y_obj = st.selectbox(
+        "Variable objetivo a predecir",
+        cols_num,
+        key="model_cmp_y"
+    )
+
+    # =========================================================
+    # TOP N VARIABLES
+    # =========================================================
+    top_n = st.selectbox(
+        "Número de variables explicativas (Top N)",
+        [5, 10, 15],
+        index=1,
+        key="model_cmp_topn"
+    )
+
+    posibles_x = [c for c in cols_num if c != y_obj]
+
+    # =========================================================
+    # RANKING DE VARIABLES (MISMA LÓGICA QUE CORRELACIONES)
+    # =========================================================
+    from sklearn.feature_selection import mutual_info_regression
+    from sklearn.linear_model import LinearRegression
+    import numpy as np
+
+    df_rank_base = df[posibles_x + [y_obj]].dropna()
+
+    if len(df_rank_base) < 30:
+        st.warning("Datos insuficientes para entrenar modelos fiables")
+        st.stop()
+
+    X_rank = df_rank_base[posibles_x]
+    y_rank = df_rank_base[y_obj]
+
+    mi = mutual_info_regression(X_rank, y_rank, random_state=42)
+
+    ranking = []
+
+    for i, col in enumerate(posibles_x):
+        lr = LinearRegression().fit(X_rank[[col]], y_rank)
+
+        ranking.append({
+            "Variable": col,
+            "Pearson": df_rank_base[[col, y_obj]].corr().iloc[0, 1],
+            "Spearman": df_rank_base[[col, y_obj]].corr(method="spearman").iloc[0, 1],
+            "Mutual_Info": mi[i],
+            "R2": lr.score(X_rank[[col]], y_rank)
+        })
+
+    df_rank = pd.DataFrame(ranking)
+
+    def normalizar(s):
+        if s.max() == s.min():
+            return 0
+        return (s - s.min()) / (s.max() - s.min())
+
+    df_rank["Score"] = (
+        normalizar(df_rank["Pearson"].abs())
+        + normalizar(df_rank["Spearman"].abs())
+        + normalizar(df_rank["Mutual_Info"])
+        + normalizar(df_rank["R2"])
+    )
+
+    X_cols = (
+        df_rank
+        .sort_values("Score", ascending=False)
+        .head(top_n)["Variable"]
+        .tolist()
+    )
+
+    # =========================================================
+    # PREPARACIÓN FINAL DE DATOS
+    # =========================================================
+    df_model = df[X_cols + [y_obj]].dropna()
+
+    X = df_model[X_cols]
+    y = df_model[y_obj]
+
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import r2_score, mean_absolute_error
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.25,
+        random_state=42
+    )
+
+    # =========================================================
+    # DEFINICIÓN DE MODELOS
+    # =========================================================
+    from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor
+
+    modelos = {
+        "Regresión lineal": LinearRegression(),
+        "Random Forest": RandomForestRegressor(
+            n_estimators=300,
+            random_state=42,
+            n_jobs=-1
+        ),
+        "Gradient Boosting": GradientBoostingRegressor(
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=4,
+            random_state=42
+        ),
+        "HistGradient Boosting": HistGradientBoostingRegressor(
+            max_depth=6,
+            learning_rate=0.05,
+            max_iter=300,
+            random_state=42
+        )
+    }
+
+    # =========================================================
+    # ENTRENAMIENTO Y EVALUACIÓN
+    # =========================================================
+    resultados = {}
+
+    for nombre, modelo in modelos.items():
+        modelo.fit(X_train, y_train)
+        y_pred = modelo.predict(X_test)
+
+        resultados[nombre] = {
+            "y_pred": y_pred,
+            "R2": r2_score(y_test, y_pred),
+            "MAE": mean_absolute_error(y_test, y_pred)
+        }
+
+    # =========================================================
+    # MÉTRICAS RESUMEN
+    # =========================================================
+    st.markdown("### Métricas comparativas")
+
+    df_metricas = pd.DataFrame({
+        nombre: {
+            "R2": res["R2"],
+            "MAE": res["MAE"]
+        }
+        for nombre, res in resultados.items()
+    }).T
+
+    st.dataframe(df_metricas, use_container_width=True)
+
+    # =========================================================
+    # GRÁFICAS REAL VS PREDICHO (UNA POR MODELO)
+    # =========================================================
+    st.markdown("### Comparación visual: valores reales vs predichos")
+
+    cols = st.columns(2)
+
+    for i, (nombre, res) in enumerate(resultados.items()):
+        df_plot = pd.DataFrame({
+            "Real": y_test,
+            "Predicho": res["y_pred"]
+        })
+
+        fig = px.scatter(
+            df_plot,
+            x="Real",
+            y="Predicho",
+            title=f"{nombre} (R² = {res['R2']:.3f})"
+        )
+
+        min_v = min(df_plot.min())
+        max_v = max(df_plot.max())
+
+        fig.add_shape(
+            type="line",
+            x0=min_v, y0=min_v,
+            x1=max_v, y1=max_v,
+            line=dict(color="black", dash="dash")
+        )
+
+        fig.update_layout(
+            xaxis_title="Valor real",
+            yaxis_title="Valor predicho"
+        )
+
+        cols[i % 2].plotly_chart(fig, use_container_width=True)
+
+    # =========================================================
+    # CONCLUSIÓN AUTOMÁTICA
+    # =========================================================
+    mejor_modelo = df_metricas["R2"].idxmax()
+
+    st.markdown(
+        f"""
+        El modelo con mejor rendimiento según R² es **{mejor_modelo}**.
+        La comparación se ha realizado usando las mismas variables,
+        el mismo conjunto de entrenamiento y el mismo conjunto de validación.
+        """
+    )
 
 # ============================================================
 # PESTAÑA 5 — VACÍA
