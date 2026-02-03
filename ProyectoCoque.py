@@ -397,11 +397,35 @@ with tab_filtros:
     else:
         for nombre, f in st.session_state.filtros_guardados.items():
             with st.expander(nombre):
-
+    
                 st.write(f"**Cámara:** {f.get('camara', '-')}")
                 st.write(f"**Variable X:** {f.get('x_var', '-')}")
                 st.markdown("**Rangos:**")
                 st.json(f.get("rangos", {}))
+    
+                st.markdown("### Editar variables excluidas en este filtro")
+    
+                camara_filtro = f["camara"]
+    
+                df_original = st.session_state.df_camaras_original[camara_filtro]
+                cols_num = df_original.select_dtypes(include="number").columns.tolist()
+    
+                vars_actuales = f.get("variables_excluidas", [])
+    
+                vars_editadas = st.multiselect(
+                    "Variables excluidas en este filtro",
+                    cols_num,
+                    default=vars_actuales,
+                    key=f"edit_vars_{nombre}"
+                )
+    
+                # BOTÓN QUE TE FALTA
+                if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
+    
+                    st.session_state.filtros_guardados[nombre]["variables_excluidas"] = vars_editadas
+    
+                    st.success("Filtro actualizado correctamente")
+
 
                 col1, col2, col3 = st.columns(3)
 
@@ -422,7 +446,6 @@ with tab_filtros:
                             st.session_state.filtros_activos.discard(n)
                 
                     st.session_state.filtros_activos.add(nombre)
-                    st.session_state.variables_excluidas_global[camara_filtro] = f.get("variables_excluidas", [])
                 else:
                     st.session_state.filtros_activos.discard(nombre)
 
