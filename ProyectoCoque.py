@@ -1028,14 +1028,15 @@ with tab4:
     )
 
     # =========================================================
-    # TOP N VARIABLES
+    # SELECCIÓN DE NÚMERO DE VARIABLES EXPLICATIVAS
     # =========================================================
-    top_n = st.selectbox(
-        "Número de variables explicativas (Top N)",
-        [5, 10, 15],
+    opcion_vars = st.selectbox(
+        "Variables explicativas a utilizar",
+        ["Top 5", "Top 10", "Top 15", "Todas"],
         index=1,
         key="model_cmp_topn"
     )
+
 
     posibles_x = [c for c in cols_num if c != y_obj]
 
@@ -1084,12 +1085,21 @@ with tab4:
         + normalizar(df_rank["R2"])
     )
 
-    X_cols = (
-        df_rank
-        .sort_values("Score", ascending=False)
-        .head(top_n)["Variable"]
-        .tolist()
-    )
+    df_rank = df_rank.sort_values("Score", ascending=False)
+
+    if opcion_vars == "Top 5":
+        X_cols = df_rank.head(5)["Variable"].tolist()
+    
+    elif opcion_vars == "Top 10":
+        X_cols = df_rank.head(10)["Variable"].tolist()
+    
+    elif opcion_vars == "Top 15":
+        X_cols = df_rank.head(15)["Variable"].tolist()
+    
+    else:
+        X_cols = df_rank["Variable"].tolist()
+        
+    st.write(f"Número de variables utilizadas: {len(X_cols)}")
 
     # =========================================================
     # PREPARACIÓN FINAL DE DATOS
