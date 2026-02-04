@@ -905,8 +905,12 @@ with tab2:
                     )
     
         output.seek(0)
-        nombre = st.session_state.filtro_activo or "sin_filtro"
-    
+        if st.session_state.filtros_activos:
+            nombre = list(st.session_state.filtros_activos)[0]
+        else:
+            nombre = "sin_filtro"
+        
+            
         st.download_button(
             "📥 Descargar Excel (una hoja por cámara)",
             data=output,
