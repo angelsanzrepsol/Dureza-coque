@@ -466,12 +466,11 @@ with tab_filtros:
                     
                     st.session_state.variables_excluidas_global[camara_filtro] = vars_excluidas
                     
-                    st.rerun()
 
                 else:
                     st.session_state.filtros_activos.discard(nombre)
                     st.session_state.variables_excluidas_global[camara_filtro] = []
-                    st.rerun()
+                st.rerun()
                     
                 # ---------------------------
                 # ELIMINAR FILTRO
@@ -942,7 +941,13 @@ with tab3:
     # =========================================================
     # EXCLUSIÓN DE VARIABLES
     # =========================================================
-    posibles_x = [c for c in cols_num if c != y_obj]
+    vars_global = st.session_state.variables_excluidas_global.get(camara, [])
+
+    posibles_x = [
+        c for c in cols_num
+        if c != y_obj and c not in vars_global
+    ]
+
 
     vars_excluidas = st.multiselect(
         "Variables a excluir del análisis",
