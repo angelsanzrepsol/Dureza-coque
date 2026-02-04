@@ -465,11 +465,14 @@ with tab_filtros:
                         vars_excluidas = [v for v in vars_excluidas if v in df_actual.columns]
                     
                     st.session_state.variables_excluidas_global[camara_filtro] = vars_excluidas
-
+                    
+                    st.rerun()
 
                 else:
                     st.session_state.filtros_activos.discard(nombre)
-
+                    st.session_state.variables_excluidas_global[camara_filtro] = []
+                    st.rerun()
+                    
                 # ---------------------------
                 # ELIMINAR FILTRO
                 # ---------------------------
