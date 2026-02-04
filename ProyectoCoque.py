@@ -566,9 +566,27 @@ with tab2:
     )
     
     if filtro_sel != "(ninguno)":
-        st.session_state.filtro_activo = filtro_sel
+
+        filtro = st.session_state.filtros_guardados[filtro_sel]
+        camara_filtro = filtro["camara"]
+    
+        # Limpiar filtros activos de esa cámara
+        for n in list(st.session_state.filtros_activos):
+            if st.session_state.filtros_guardados[n]["camara"] == camara_filtro:
+                st.session_state.filtros_activos.discard(n)
+    
+        # Activar el nuevo
+        st.session_state.filtros_activos.add(filtro_sel)
+    
+        # Aplicar variables excluidas
+        st.session_state.variables_excluidas_global[camara_filtro] = filtro.get(
+            "variables_excluidas",
+            []
+        )
+    
     else:
-        st.session_state.filtro_activo = None
+        st.session_state.filtros_activos.clear()
+
 
 
     # --------------------------------------------------
