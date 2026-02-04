@@ -11,3 +11,5 @@ lime
 xgboost
 xlsxwriter
 lightgbm
+xgboost
+catboost

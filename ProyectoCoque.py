@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 import re
 import json
 from io import BytesIO
+from xgboost import XGBRegressor
+from catboost import CatBoostRegressor
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -1305,25 +1307,47 @@ with tab4:
     from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor
 
     modelos = {
+
         "Regresión lineal": LinearRegression(),
+    
         "Random Forest": RandomForestRegressor(
             n_estimators=300,
             random_state=42,
             n_jobs=-1
         ),
+    
         "Gradient Boosting": GradientBoostingRegressor(
             n_estimators=300,
             learning_rate=0.05,
             max_depth=4,
             random_state=42
         ),
+    
         "HistGradient Boosting": HistGradientBoostingRegressor(
             max_depth=6,
             learning_rate=0.05,
             max_iter=300,
             random_state=42
+        ),
+    
+        "XGBoost": XGBRegressor(
+            n_estimators=400,
+            learning_rate=0.03,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42
+        ),
+    
+        "CatBoost": CatBoostRegressor(
+            iterations=400,
+            learning_rate=0.03,
+            depth=6,
+            verbose=0,
+            random_state=42
         )
     }
+
 
     # =========================================================
     # ENTRENAMIENTO Y EVALUACIÓN
@@ -1533,10 +1557,38 @@ with tab5:
     )
 
     modelos = {
-        "RF": RandomForestRegressor(n_estimators=300, random_state=42),
-        "GB": GradientBoostingRegressor(random_state=42),
-        "HGB": HistGradientBoostingRegressor(random_state=42)
+
+        "Random Forest": RandomForestRegressor(
+            n_estimators=300,
+            random_state=42
+        ),
+    
+        "Gradient Boosting": GradientBoostingRegressor(
+            random_state=42
+        ),
+    
+        "HistGradient Boosting": HistGradientBoostingRegressor(
+            random_state=42
+        ),
+    
+        "XGBoost": XGBRegressor(
+            n_estimators=400,
+            learning_rate=0.03,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42
+        ),
+    
+        "CatBoost": CatBoostRegressor(
+            iterations=400,
+            learning_rate=0.03,
+            depth=6,
+            verbose=0,
+            random_state=42
+        )
     }
+
 
     mejor_modelo = None
     mejor_r2 = -999
