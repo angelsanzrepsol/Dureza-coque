@@ -470,7 +470,6 @@ with tab_filtros:
                 else:
                     st.session_state.filtros_activos.discard(nombre)
                     st.session_state.variables_excluidas_global[camara_filtro] = []
-                    st.rerun()
                     
                 # ---------------------------
                 # ELIMINAR FILTRO
