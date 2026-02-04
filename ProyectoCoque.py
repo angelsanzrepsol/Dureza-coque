@@ -457,6 +457,10 @@ with tab_filtros:
                             st.session_state.filtros_activos.discard(n)
                 
                     st.session_state.filtros_activos.add(nombre)
+                    vars_excluidas = f.get("variables_excluidas", [])
+
+                    st.session_state.variables_excluidas_global[camara_filtro] = vars_excluidas
+
                 else:
                     st.session_state.filtros_activos.discard(nombre)
 
