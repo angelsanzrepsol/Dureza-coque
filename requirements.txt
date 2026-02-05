@@ -1,11 +1,11 @@
-streamlit==1.32.2
+streamlit
 plotly
 pandas
 numpy
 matplotlib
 Pillow
 openpyxl
-scikit-learn==1.4.2
+scikit-learn
 shap
 lime
 xgboost
