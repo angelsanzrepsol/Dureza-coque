@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 import re
 import json
 from io import BytesIO
+from xgboost import XGBRegressor
+from catboost import CatBoostRegressor
 
 # CONFIGURACIÓN GENERAL
 st.set_page_config(
@@ -1183,6 +1185,9 @@ with tab4:
 
     X = df_model[X_cols]
     y = df_model[y_obj]
+    
+    X = X.apply(pd.to_numeric, errors="coerce").astype(float)
+    y = pd.to_numeric(y, errors="coerce").astype(float)
 
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import r2_score, mean_absolute_error
@@ -1198,24 +1203,47 @@ with tab4:
 
     modelos = {
         "Regresión lineal": LinearRegression(),
+    
         "Random Forest": RandomForestRegressor(
             n_estimators=300,
             random_state=42,
             n_jobs=-1
         ),
+    
         "Gradient Boosting": GradientBoostingRegressor(
             n_estimators=300,
             learning_rate=0.05,
             max_depth=4,
             random_state=42
         ),
+    
         "HistGradient Boosting": HistGradientBoostingRegressor(
             max_depth=6,
             learning_rate=0.05,
             max_iter=300,
             random_state=42
+        ),
+    
+        # NUEVOS MODELOS
+        "XGBoost": XGBRegressor(
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            n_jobs=-1
+        ),
+    
+        "CatBoost": CatBoostRegressor(
+            iterations=300,
+            learning_rate=0.05,
+            depth=6,
+            verbose=False,
+            random_state=42
         )
     }
+
 
     # ENTRENAMIENTO Y EVALUACIÓN
     resultados = {}
@@ -1395,6 +1423,9 @@ with tab5:
 
     X = df_model[X_cols]
     y = df_model[y_obj]
+    
+    X = X.apply(pd.to_numeric, errors="coerce").astype(float)
+    y = pd.to_numeric(y, errors="coerce").astype(float)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -1403,10 +1434,31 @@ with tab5:
     )
 
     modelos = {
-        "RF": RandomForestRegressor(n_estimators=300, random_state=42),
+        "RF": RandomForestRegressor(
+            n_estimators=300,
+            random_state=42
+        ),
+    
         "GB": GradientBoostingRegressor(random_state=42),
-        "HGB": HistGradientBoostingRegressor(random_state=42)
+    
+        "HGB": HistGradientBoostingRegressor(random_state=42),
+    
+        "XGB": XGBRegressor(
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=6,
+            random_state=42
+        ),
+    
+        "CAT": CatBoostRegressor(
+            iterations=300,
+            learning_rate=0.05,
+            depth=6,
+            verbose=False,
+            random_state=42
+        )
     }
+
 
     mejor_modelo = None
     mejor_r2 = -999
