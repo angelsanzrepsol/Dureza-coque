@@ -12,17 +12,13 @@ import re
 import json
 from io import BytesIO
 
-# ============================================================
 # CONFIGURACIÓN GENERAL
-# ============================================================
 st.set_page_config(
     page_title="Análisis dureza de coque",
     layout="wide"
 )
 
-# ============================================================
 # ESTÉTICA (INDUSTRIAL – COPIADA DE TUS APPS)
-# ============================================================
 st.markdown("""
 <style>
 
@@ -65,9 +61,7 @@ h1, h2, h3, h4, h5, h6 {
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
 # CABECERA + LOGO
-# ============================================================
 st.markdown(
     "<h1 class='darkblue-title'>Análisis dureza del coque</h1>",
     unsafe_allow_html=True
@@ -98,9 +92,7 @@ if logo_path.exists():
 else:
     st.info("Archivo logo_repsol.png no encontrado.")
 
-# ============================================================
 # FUNCIÓN DE LECTURA DE DATOS DE PROCESO
-# ============================================================
 
 def leer_datos_csv(uploaded_file):
     try:
@@ -157,9 +149,7 @@ def aplicar_filtros_activos(df, camara):
                 df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
 
     return df
-# ============================================================
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
-# ============================================================
 st.sidebar.header("Datos de proceso")
 
 uploaded_files = st.sidebar.file_uploader(
@@ -182,9 +172,7 @@ if "df_camaras_eliminados" not in st.session_state:
 if "variables_excluidas_global" not in st.session_state:
     st.session_state.variables_excluidas_global = {}
 
-# ===============================
 # ESTADOS PARA FILTROS GUARDADOS
-# ===============================
 if "filtros_guardados" not in st.session_state:
     st.session_state.filtros_guardados = {}
 
@@ -192,9 +180,7 @@ if "filtros_activos" not in st.session_state:
     st.session_state.filtros_activos = set()
 
 
-# ===============================
 # ESTADO PARA DESCARGA TAB 2
-# ===============================
 if "datos_descarga_tab2" not in st.session_state:
     st.session_state.datos_descarga_tab2 = {}
 
@@ -251,9 +237,7 @@ else:
         st.sidebar.write(f"- {cam}")
 
 
-# ============================================================
-# PESTAÑAS OBLIGATORIAS (VACÍAS)
-# ============================================================
+# PESTAÑAS 
 tab1, tab_filtros, tab2, tab3, tab4, tab5 = st.tabs([
     "Visión General",
     "Filtros guardados",
@@ -263,9 +247,7 @@ tab1, tab_filtros, tab2, tab3, tab4, tab5 = st.tabs([
     "Simulador de Operación"
 ])
 
-# ============================================================
-# PESTAÑA 1 — VACÍA
-# ============================================================
+# PESTAÑA 1 
 with tab1:
     st.subheader("Visión General — creación de filtros")
 
@@ -335,17 +317,13 @@ with tab1:
         }
 
         st.success(f"Filtro '{nombre_filtro}' guardado")
-# ============================================================
 # PESTAÑA — FILTROS GUARDADOS
-# ============================================================
 with tab_filtros:
 
 
     st.subheader("Filtros guardados")
 
-    # --------------------------------------------------
     # DESCARGAR TODOS LOS FILTROS
-    # --------------------------------------------------
     if st.session_state.filtros_guardados:
         filtros_json = json.dumps(
             st.session_state.filtros_guardados,
@@ -359,9 +337,7 @@ with tab_filtros:
             mime="application/json"
         )
 
-    # --------------------------------------------------
     # IMPORTAR FILTROS
-    # --------------------------------------------------
     st.markdown("---")
     st.markdown("### Importar filtros")
 
@@ -386,9 +362,7 @@ with tab_filtros:
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
 
-    # --------------------------------------------------
     # LISTADO DE FILTROS
-    # --------------------------------------------------
     st.markdown("---")
     st.markdown("### Filtros disponibles")
 
@@ -440,9 +414,7 @@ with tab_filtros:
 
                 col1, col2, col3 = st.columns(3)
 
-                # ---------------------------
                 # ACTIVAR FILTRO (SOLO 1 POR CÁMARA)
-                # ---------------------------
                 camara_filtro = f["camara"]
                 activo = nombre in st.session_state.filtros_activos
                 
@@ -471,18 +443,14 @@ with tab_filtros:
                     st.session_state.filtros_activos.discard(nombre)
                     st.session_state.variables_excluidas_global[camara_filtro] = []
                     
-                # ---------------------------
                 # ELIMINAR FILTRO
-                # ---------------------------
                 if col2.button("Eliminar", key=f"eliminar_{nombre}"):
                     del st.session_state.filtros_guardados[nombre]
                     if st.session_state.filtro_activo == nombre:
                         st.session_state.filtro_activo = None
                     st.rerun()
 
-                # ---------------------------
                 # DESCARGAR FILTRO INDIVIDUAL
-                # ---------------------------
                 filtro_individual = {nombre: f}
                 filtro_json = json.dumps(filtro_individual, indent=4)
 
@@ -500,16 +468,12 @@ with tab_filtros:
                     key=f"download_{nombre}"
                 )
 
-# ============================================================
 # PESTAÑA 3 — GRAFICADO
-# ============================================================
 with tab2:
 
     st.subheader("Graficado interactivo avanzado de variables de proceso")
 
-    # --------------------------------------------------
     # COMPROBACIÓN DE DATOS
-    # --------------------------------------------------
     if "df_camaras_activo" not in st.session_state:
         st.warning("Cargue primero datos de cámaras.")
         st.stop()
@@ -520,9 +484,7 @@ with tab2:
 
     camaras_disponibles = sorted(df_camaras_activo.keys())
 
-    # --------------------------------------------------
     # SELECCIÓN DE CÁMARAS A REPRESENTAR
-    # --------------------------------------------------
     camaras_sel = st.multiselect(
         "Cámaras a representar",
         camaras_disponibles,
@@ -533,9 +495,7 @@ with tab2:
         st.warning("Seleccione al menos una cámara.")
         st.stop()
 
-    # --------------------------------------------------
     # SELECCIÓN DE CÁMARA FUENTE DE X
-    # --------------------------------------------------
     camara_x = st.selectbox(
         "Cámara de referencia para el eje X",
         camaras_sel
@@ -557,9 +517,7 @@ with tab2:
         "Variable eje X (común)",
         cols_num_x
     )
-    # --------------------------------------------------
     # FILTRO PREFIJADO
-    # --------------------------------------------------
     filtro_sel = st.selectbox(
         "Filtro prefijado",
         ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
@@ -589,13 +547,9 @@ with tab2:
 
 
 
-    # --------------------------------------------------
     # SELECCIÓN DE Y POR CÁMARA
-    # --------------------------------------------------
     st.markdown("### Selección de variables Y por cámara")
-    # =====================================================
     # VARIABLE PARA GRADIENTE DE COLOR
-    # =====================================================
     st.markdown("### Variable para colorear los puntos")
     
     vars_color_posibles = cols_num_x.copy()
@@ -636,9 +590,7 @@ with tab2:
         st.warning("Seleccione al menos una variable Y.")
         st.stop()
 
-    # --------------------------------------------------
     # BOTÓN RESTAURAR
-    # --------------------------------------------------
     if st.button("Restaurar todo"):
         st.session_state.df_camaras_activo = {
             k: v.copy() for k, v in df_camaras_original.items()
@@ -651,9 +603,7 @@ with tab2:
         st.session_state.axis_limits_tab2 = {}
         st.rerun()
 
-    # --------------------------------------------------
     # FILTRO POR X (USANDO CÁMARA DE REFERENCIA)
-    # --------------------------------------------------
     xmin = float(df_x_ref[x_var].min())
     xmax = float(df_x_ref[x_var].max())
 
@@ -663,21 +613,15 @@ with tab2:
         (xmin, xmax)
     )
 
-    # --------------------------------------------------
     # ESTADO DE EJES
-    # --------------------------------------------------
     if "axis_frozen_tab2" not in st.session_state:
         st.session_state.axis_frozen_tab2 = False
 
     if "axis_limits_tab2" not in st.session_state:
         st.session_state.axis_limits_tab2 = {}
 
-    # --------------------------------------------------
     # GRÁFICO
-    # --------------------------------------------------
-    # --------------------------------------------------
     # APLICAR FILTRO GUARDADO
-    # --------------------------------------------------
 
     fig = go.Figure()
     st.session_state.datos_descarga_tab2 = {}
@@ -700,9 +644,7 @@ with tab2:
             ]
 
         for y in y_vars:
-            # -----------------------------------------
             # CONTROL DE DATAFRAME VACÍO
-            # -----------------------------------------
             if df_cam.empty or df_cam[y].dropna().empty:
                 st.info(f"{camara} – {y}: sin datos tras aplicar filtros")
                 continue
@@ -733,9 +675,7 @@ with tab2:
             
             st.session_state.datos_descarga_tab2[camara].append(df_export)
 
-            # --------------------------------------------------
             # SCATTER CON GRADIENTE DE COLOR
-            # --------------------------------------------------
             if color_var and color_var in df_y.columns:
             
                 fig.add_trace(
@@ -795,9 +735,7 @@ with tab2:
         legend_title="Cámara / Variable"
     )
 
-    # --------------------------------------------------
     # CONGELAR EJES
-    # --------------------------------------------------
     if st.session_state.axis_frozen_tab2:
         fig.update_layout(
             xaxis=dict(range=st.session_state.axis_limits_tab2["x"], autorange=False),
@@ -813,9 +751,7 @@ with tab2:
         }
         st.session_state.axis_frozen_tab2 = True
 
-    # --------------------------------------------------
     # EXCLUSIÓN DESDE GRÁFICO
-    # --------------------------------------------------
     if event and event.selection and event.selection.points:
         if st.button("Excluir puntos seleccionados del gráfico"):
             for p in event.selection.points:
@@ -834,9 +770,7 @@ with tab2:
 
             st.rerun()
 
-    # --------------------------------------------------
     # EXCLUSIÓN MANUAL POR TABLA
-    # --------------------------------------------------
     st.markdown("---")
     st.subheader("Excluir puntos manualmente por cámara")
 
@@ -868,9 +802,7 @@ with tab2:
                 df_camaras_activo[camara] = df_camaras_activo[camara].drop(filas)
                 st.rerun()
 
-    # --------------------------------------------------
     # TABLA DE EXCLUIDOS
-    # --------------------------------------------------
     st.markdown("---")
     st.subheader("Puntos excluidos del análisis")
 
@@ -920,15 +852,11 @@ with tab2:
     else:
         st.info("No hay datos para descargar")
 
-# ============================================================
 # PESTAÑA 3 — VACÍA
-# ============================================================
 with tab3:
     st.subheader("Correlaciones con datos filtrados y ranking configurable")
 
-    # =========================================================
     # DATOS FILTRADOS
-    # =========================================================
     if not st.session_state.df_camaras_activo:
         st.info("Cargue datos primero")
         st.stop()
@@ -950,18 +878,14 @@ with tab3:
         st.warning("No hay suficientes variables numéricas tras aplicar filtros")
         st.stop()
 
-    # =========================================================
     # VARIABLE OBJETIVO
-    # =========================================================
     y_obj = st.selectbox(
         "Variable objetivo",
         cols_num,
         key="corr_y_obj"
     )
 
-    # =========================================================
     # EXCLUSIÓN DE VARIABLES
-    # =========================================================
     vars_global = st.session_state.variables_excluidas_global.get(camara, [])
 
     posibles_x = [
@@ -983,9 +907,7 @@ with tab3:
         st.warning("No quedan variables para analizar tras la exclusión")
         st.stop()
 
-    # =========================================================
     # PREPARACIÓN DE DATOS
-    # =========================================================
     df_base = df[X_cols + [y_obj]].dropna()
 
     if len(df_base) < 20:
@@ -995,9 +917,7 @@ with tab3:
     X = df_base[X_cols]
     y = df_base[y_obj]
 
-    # =========================================================
     # CÁLCULO DE MÉTRICAS
-    # =========================================================
     from sklearn.feature_selection import mutual_info_regression
     from sklearn.linear_model import LinearRegression
     import numpy as np
@@ -1026,9 +946,7 @@ with tab3:
 
     df_corr = pd.DataFrame(resultados)
 
-    # =========================================================
     # NORMALIZACIÓN Y SCORE DE IMPORTANCIA
-    # =========================================================
     def normalizar(s):
         if s.max() == s.min():
             return 0
@@ -1052,9 +970,7 @@ with tab3:
         .reset_index(drop=True)
     )
 
-    # =========================================================
     # SELECTOR DE TOP N
-    # =========================================================
     st.markdown("### Configuración del ranking")
 
     opcion_top = st.selectbox(
@@ -1070,9 +986,7 @@ with tab3:
     else:
         df_rank = df_corr.copy()
 
-    # =========================================================
     # TABLA CUANTITATIVA
-    # =========================================================
     st.markdown("### Métricas cuantitativas de correlación")
 
     st.dataframe(
@@ -1090,9 +1004,7 @@ with tab3:
         use_container_width=True
     )
 
-    # =========================================================
     # RANKING VISUAL
-    # =========================================================
     st.markdown("### Ranking visual de importancia de correlación")
 
     fig_rank = px.bar(
@@ -1111,9 +1023,7 @@ with tab3:
 
     st.plotly_chart(fig_rank, use_container_width=True)
 
-    # =========================================================
     # VARIABLE MÁS RELEVANTE (TRAS EXCLUSIONES)
-    # =========================================================
     var_top = df_corr.iloc[0]
 
     st.markdown(
@@ -1121,9 +1031,7 @@ with tab3:
         f"**{var_top['Variable']}**, considerando las exclusiones aplicadas."
     )
 
-    # =========================================================
     # MAPA DE CALOR DE CORRELACIONES
-    # =========================================================
     st.markdown("### Mapa de calor de correlaciones (Spearman)")
 
     corr_matrix = df_base.corr(method="spearman")
@@ -1152,15 +1060,11 @@ with tab3:
         key="corr_download"
     )
 
-# ============================================================
 # PESTAÑA 4 — VACÍA
-# ============================================================
 with tab4:
     st.subheader("Modelo predictivo: comparación de algoritmos de Machine Learning")
 
-    # =========================================================
     # DATOS FILTRADOS
-    # =========================================================
     if not st.session_state.df_camaras_activo:
         st.info("Cargue datos primero")
         st.stop()
@@ -1182,18 +1086,14 @@ with tab4:
         st.warning("No hay suficientes variables numéricas")
         st.stop()
 
-    # =========================================================
     # VARIABLE OBJETIVO
-    # =========================================================
     y_obj = st.selectbox(
         "Variable objetivo a predecir",
         cols_num,
         key="model_cmp_y"
     )
 
-    # =========================================================
     # SELECCIÓN DE NÚMERO DE VARIABLES EXPLICATIVAS
-    # =========================================================
     opcion_vars = st.selectbox(
         "Variables explicativas a utilizar",
         ["Top 5", "Top 10", "Top 15", "Todas"],
@@ -1204,9 +1104,7 @@ with tab4:
 
     posibles_x = [c for c in cols_num if c != y_obj]
 
-    # =========================================================
     # RANKING DE VARIABLES (MISMA LÓGICA QUE CORRELACIONES)
-    # =========================================================
     from sklearn.feature_selection import mutual_info_regression
     from sklearn.linear_model import LinearRegression
     import numpy as np
@@ -1262,9 +1160,7 @@ with tab4:
     
     else:
         X_cols = df_rank["Variable"].tolist()
-    # =========================================================
     # EXCLUSIÓN MANUAL DE VARIABLES
-    # =========================================================
     vars_excluir_modelo = st.multiselect(
         "Excluir variables del modelo",
         X_cols,
@@ -1282,9 +1178,7 @@ with tab4:
     st.write(f"Número de variables utilizadas: {len(X_cols)}")
     st.write("Variables finales del modelo:", X_cols)
 
-    # =========================================================
     # PREPARACIÓN FINAL DE DATOS
-    # =========================================================
     df_model = df[X_cols + [y_obj]].dropna()
 
     X = df_model[X_cols]
@@ -1299,9 +1193,7 @@ with tab4:
         random_state=42
     )
 
-    # =========================================================
     # DEFINICIÓN DE MODELOS
-    # =========================================================
     from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor
 
     modelos = {
@@ -1325,9 +1217,7 @@ with tab4:
         )
     }
 
-    # =========================================================
     # ENTRENAMIENTO Y EVALUACIÓN
-    # =========================================================
     resultados = {}
 
     for nombre, modelo in modelos.items():
@@ -1340,9 +1230,7 @@ with tab4:
             "MAE": mean_absolute_error(y_test, y_pred)
         }
 
-    # =========================================================
     # MÉTRICAS RESUMEN
-    # =========================================================
     st.markdown("### Métricas comparativas")
 
     df_metricas = pd.DataFrame({
@@ -1355,9 +1243,7 @@ with tab4:
 
     st.dataframe(df_metricas, use_container_width=True)
 
-    # =========================================================
     # GRÁFICAS REAL VS PREDICHO (UNA POR MODELO)
-    # =========================================================
     st.markdown("### Comparación visual: valores reales vs predichos")
 
     cols = st.columns(2)
@@ -1392,9 +1278,7 @@ with tab4:
 
         cols[i % 2].plotly_chart(fig, use_container_width=True)
 
-    # =========================================================
     # CONCLUSIÓN AUTOMÁTICA
-    # =========================================================
     mejor_modelo = df_metricas["R2"].idxmax()
 
     st.markdown(
@@ -1405,15 +1289,11 @@ with tab4:
         """
     )
 
-# ============================================================
-# PESTAÑA 5 — VACÍA
-# ============================================================
+# PESTAÑA 5 
 with tab5:
     st.subheader("Simulador de operación basado en Machine Learning")
 
-    # =========================================================
     # DATOS FILTRADOS
-    # =========================================================
     if not st.session_state.df_camaras_activo:
         st.info("Cargue datos primero")
         st.stop()
@@ -1431,18 +1311,14 @@ with tab5:
     df = aplicar_filtros_activos(df, camara)
     cols_num = df.select_dtypes(include="number").columns.tolist()
 
-    # =========================================================
     # VARIABLE OBJETIVO
-    # =========================================================
     y_obj = st.selectbox(
         "Variable objetivo a simular",
         cols_num,
         key="sim_y"
     )
 
-    # =========================================================
     # SELECCIÓN DE VARIABLES TOP N
-    # =========================================================
     opcion_vars = st.selectbox(
         "Variables explicativas",
         ["Top 5", "Top 10", "Top 15", "Todas"],
@@ -1452,9 +1328,7 @@ with tab5:
 
     posibles_x = [c for c in cols_num if c != y_obj]
 
-    # =========================================================
     # RANKING DE VARIABLES
-    # =========================================================
     from sklearn.feature_selection import mutual_info_regression
     from sklearn.linear_model import LinearRegression
     import numpy as np
@@ -1492,9 +1366,7 @@ with tab5:
     else:
         X_cols = df_rank["Variable"].tolist()
 
-    # =========================================================
     # EXCLUSIÓN MANUAL
-    # =========================================================
     vars_excluir = st.multiselect(
         "Excluir variables del simulador",
         X_cols,
@@ -1510,9 +1382,7 @@ with tab5:
 
     st.write("Variables utilizadas:", X_cols)
 
-    # =========================================================
     # ENTRENAMIENTO DEL MEJOR MODELO
-    # =========================================================
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import r2_score
     from sklearn.ensemble import (
@@ -1551,9 +1421,7 @@ with tab5:
 
     st.success(f"Modelo seleccionado automáticamente (R² = {mejor_r2:.3f})")
 
-    # =========================================================
     # SLIDERS DE SIMULACIÓN
-    # =========================================================
     st.markdown("### Ajuste de variables operativas")
 
     entrada_usuario = {}
@@ -1573,16 +1441,12 @@ with tab5:
 
     entrada_df = pd.DataFrame([entrada_usuario])
 
-    # =========================================================
     # PREDICCIÓN
-    # =========================================================
     pred = mejor_modelo.predict(entrada_df)[0]
 
     st.metric("Predicción de la variable objetivo", f"{pred:.3f}")
 
-    # =========================================================
     # COMPARACIÓN CON MEDIDA REAL
-    # =========================================================
     valor_real = st.number_input(
         "Introducir valor real medido (opcional)",
         value=0.0,
@@ -1593,9 +1457,7 @@ with tab5:
         error = pred - valor_real
         st.metric("Error de predicción", f"{error:.3f}")
 
-    # =========================================================
     # POSICIÓN DENTRO DEL HISTÓRICO
-    # =========================================================
     hist_min = df[y_obj].min()
     hist_max = df[y_obj].max()
 
@@ -1605,9 +1467,7 @@ with tab5:
         float((pred - hist_min) / (hist_max - hist_min))
     )
 
-    # =========================================================
     # GRÁFICA COMPARATIVA
-    # =========================================================
     import plotly.graph_objects as go
 
     fig = go.Figure()
