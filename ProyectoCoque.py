@@ -1305,22 +1305,18 @@ with tab4:
     from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor
 
     modelos = {
-
         "Regresión lineal": LinearRegression(),
-    
         "Random Forest": RandomForestRegressor(
             n_estimators=300,
             random_state=42,
             n_jobs=-1
         ),
-    
         "Gradient Boosting": GradientBoostingRegressor(
             n_estimators=300,
             learning_rate=0.05,
             max_depth=4,
             random_state=42
         ),
-    
         "HistGradient Boosting": HistGradientBoostingRegressor(
             max_depth=6,
             learning_rate=0.05,
@@ -1328,7 +1324,6 @@ with tab4:
             random_state=42
         )
     }
-
 
     # =========================================================
     # ENTRENAMIENTO Y EVALUACIÓN
@@ -1538,21 +1533,10 @@ with tab5:
     )
 
     modelos = {
-
-        "Random Forest": RandomForestRegressor(
-            n_estimators=300,
-            random_state=42
-        ),
-    
-        "Gradient Boosting": GradientBoostingRegressor(
-            random_state=42
-        ),
-    
-        "HistGradient Boosting": HistGradientBoostingRegressor(
-            random_state=42
-        )
+        "RF": RandomForestRegressor(n_estimators=300, random_state=42),
+        "GB": GradientBoostingRegressor(random_state=42),
+        "HGB": HistGradientBoostingRegressor(random_state=42)
     }
-
 
     mejor_modelo = None
     mejor_r2 = -999
