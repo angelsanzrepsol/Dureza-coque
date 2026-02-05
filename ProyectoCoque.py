@@ -11,8 +11,6 @@ import plotly.graph_objects as go
 import re
 import json
 from io import BytesIO
-from xgboost import XGBRegressor
-from catboost import CatBoostRegressor
 
 # ============================================================
 # CONFIGURACIÓN GENERAL
@@ -1328,23 +1326,6 @@ with tab4:
             learning_rate=0.05,
             max_iter=300,
             random_state=42
-        ),
-    
-        "XGBoost": XGBRegressor(
-            n_estimators=400,
-            learning_rate=0.03,
-            max_depth=6,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
-        ),
-    
-        "CatBoost": CatBoostRegressor(
-            iterations=400,
-            learning_rate=0.03,
-            depth=6,
-            verbose=0,
-            random_state=42
         )
     }
 
@@ -1568,23 +1549,6 @@ with tab5:
         ),
     
         "HistGradient Boosting": HistGradientBoostingRegressor(
-            random_state=42
-        ),
-    
-        "XGBoost": XGBRegressor(
-            n_estimators=400,
-            learning_rate=0.03,
-            max_depth=6,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
-        ),
-    
-        "CatBoost": CatBoostRegressor(
-            iterations=400,
-            learning_rate=0.03,
-            depth=6,
-            verbose=0,
             random_state=42
         )
     }
