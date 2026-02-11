@@ -406,12 +406,18 @@ with tab_filtros:
                     key=f"edit_vars_{nombre}"
                 )
     
-                # BOTÓN QUE TE FALTA
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
-    
+
                     st.session_state.filtros_guardados[nombre]["variables_excluidas"] = vars_editadas
-    
+                
+                    # incronizar si el filtro está activo
+                    if nombre in st.session_state.filtros_activos:
+                        camara_filtro = st.session_state.filtros_guardados[nombre]["camara"]
+                        st.session_state.variables_excluidas_global[camara_filtro] = vars_editadas
+                
                     st.success("Filtro actualizado correctamente")
+                    st.rerun()
+
 
 
                 col1, col2, col3 = st.columns(3)
@@ -846,7 +852,7 @@ with tab2:
         
             
         st.download_button(
-            "📥 Descargar Excel (una hoja por cámara)",
+            "Descargar Excel (una hoja por cámara)",
             data=output,
             file_name=f"datos_grafico_{nombre}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
