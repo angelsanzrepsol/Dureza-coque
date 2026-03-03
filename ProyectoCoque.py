@@ -530,7 +530,9 @@ with tab2:
         "Filtro prefijado",
         ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
     )
-    
+    if filtro_sel != "(ninguno)":
+        filtro = st.session_state.filtros_guardados[filtro_sel]
+        x_var = filtro["x_var"]
     if filtro_sel != "(ninguno)":
 
         filtro = st.session_state.filtros_guardados[filtro_sel]
