@@ -559,12 +559,6 @@ with tab2:
             "variables_excluidas", []
         )
     
-    else:
-        camara_x = st.selectbox(
-            "Cámara de referencia para el eje X",
-            camaras_sel
-        )
-    
         # Sin filtro activo
         st.session_state.filtros_activos.clear()
     
