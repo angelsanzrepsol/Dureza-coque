@@ -413,7 +413,10 @@ with tab_filtros:
                     if c != f.get("x_var")
                 ]
     
-                vars_actuales = f.get("variables_excluidas", [])
+                vars_actuales = st.session_state.filtros_guardados[nombre].get(
+                    "variables_excluidas",
+                    []
+                )
     
                 vars_editadas = st.multiselect(
                     "Variables excluidas en este filtro",
@@ -424,26 +427,18 @@ with tab_filtros:
     
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
 
-                    # Reescribir completamente el filtro
+                    filtro_actual = st.session_state.filtros_guardados[nombre]
+                
                     st.session_state.filtros_guardados[nombre] = {
-                        "camara": f.get("camara"),
-                        "x_var": f.get("x_var"),
-                        "rangos": f.get("rangos", {}),
-                        "variables_excluidas": list(vars_editadas)  # Forzar lista nueva
+                        "camara": filtro_actual.get("camara"),
+                        "x_var": filtro_actual.get("x_var"),
+                        "rangos": filtro_actual.get("rangos", {}),
+                        "variables_excluidas": list(vars_editadas)
                     }
                 
-                    # Si está activo, sincronizar exclusión global
                     if nombre in st.session_state.filtros_activos:
-                        camara_filtro = f.get("camara")
+                        camara_filtro = filtro_actual.get("camara")
                         st.session_state.variables_excluidas_global[camara_filtro] = list(vars_editadas)
-                
-                    st.success("Filtro actualizado correctamente")
-                    st.rerun()
-                
-                    # incronizar si el filtro está activo
-                    if nombre in st.session_state.filtros_activos:
-                        camara_filtro = st.session_state.filtros_guardados[nombre]["camara"]
-                        st.session_state.variables_excluidas_global[camara_filtro] = vars_editadas
                 
                     st.success("Filtro actualizado correctamente")
                     st.rerun()
