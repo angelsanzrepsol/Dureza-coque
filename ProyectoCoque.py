@@ -395,7 +395,10 @@ with tab_filtros:
                     continue
 
 
-                cols_num = df_original.select_dtypes(include="number").columns.tolist()
+                cols_num = [
+                    c for c in df_original.select_dtypes(include="number").columns.tolist()
+                    if c != f.get("x_var")
+                ]
     
                 vars_actuales = f.get("variables_excluidas", [])
     
