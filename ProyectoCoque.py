@@ -361,7 +361,14 @@ with tab_filtros:
 
             if isinstance(filtros_importados, dict):
                 for nombre, filtro in filtros_importados.items():
-                    st.session_state.filtros_guardados[nombre] = filtro
+
+                    # Forzar estructura completa del filtro
+                    st.session_state.filtros_guardados[nombre] = {
+                        "camara": filtro.get("camara"),
+                        "x_var": filtro.get("x_var"),
+                        "rangos": filtro.get("rangos", {}),
+                        "variables_excluidas": filtro.get("variables_excluidas", [])
+                    }
 
                 st.success("Filtros importados correctamente")
             else:
@@ -417,14 +424,21 @@ with tab_filtros:
     
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
 
-                    filtro_original = st.session_state.filtros_guardados[nombre]
-
+                    # Reescribir completamente el filtro
                     st.session_state.filtros_guardados[nombre] = {
-                        "camara": filtro_original.get("camara"),
-                        "x_var": filtro_original.get("x_var"),
-                        "rangos": filtro_original.get("rangos", {}),
-                        "variables_excluidas": vars_editadas
+                        "camara": f.get("camara"),
+                        "x_var": f.get("x_var"),
+                        "rangos": f.get("rangos", {}),
+                        "variables_excluidas": list(vars_editadas)  # Forzar lista nueva
                     }
+                
+                    # Si está activo, sincronizar exclusión global
+                    if nombre in st.session_state.filtros_activos:
+                        camara_filtro = f.get("camara")
+                        st.session_state.variables_excluidas_global[camara_filtro] = list(vars_editadas)
+                
+                    st.success("Filtro actualizado correctamente")
+                    st.rerun()
                 
                     # incronizar si el filtro está activo
                     if nombre in st.session_state.filtros_activos:
