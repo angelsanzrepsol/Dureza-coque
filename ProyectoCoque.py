@@ -528,7 +528,6 @@ with tab2:
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
     
-        # SOLO activar restricciones
         st.session_state.filtros_activos = {filtro_sel}
     
         camara_filtro = filtro["camara"]
@@ -538,26 +537,26 @@ with tab2:
         )
     
         st.info(f"Filtro activo aplicado a cámara {camara_filtro}")
-        st.info(f"Variable X fijada por filtro: {x_var}")
-    
     else:
-        camara_x = st.selectbox(
-            "Cámara de referencia para el eje X",
-            camaras_sel,
-            key="camara_x_tab2"
-        )
-    
         st.session_state.filtros_activos.clear()
-        x_var = None
     
     # ==============================
-    # DATAFRAME DE REFERENCIA
+    # DEFINIR SIEMPRE CÁMARA X
+    # ==============================
+    
+    camara_x = st.selectbox(
+        "Cámara de referencia para el eje X",
+        camaras_sel,
+        key="camara_x_tab2"
+    )
+    
+    # ==============================
+    # DATAFRAME REFERENCIA
     # ==============================
     
     df_x_ref = aplicar_exclusion_variables(
         df_camaras_activo[camara_x],
-        camara_x,
-        proteger=x_var
+        camara_x
     )
     
     df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
@@ -572,16 +571,15 @@ with tab2:
         st.error("No hay columnas numéricas disponibles.")
         st.stop()
     
-    if filtro_sel == "(ninguno)":
-        x_var = st.selectbox(
-            "Variable eje X",
-            cols_num_x,
-            key="x_var_tab2"
-        )
-    else:
-        if x_var not in cols_num_x:
-            st.error(f"La variable '{x_var}' no existe en la cámara {camara_x}.")
-            st.stop()    
+    # ==============================
+    # VARIABLE X LIBRE SIEMPRE
+    # ==============================
+    
+    x_var = st.selectbox(
+        "Variable eje X",
+        cols_num_x,
+        key="x_var_tab2"
+    ) 
 
     # SELECCIÓN DE Y POR CÁMARA
     st.markdown("### Selección de variables Y por cámara")
