@@ -528,15 +528,16 @@ with tab2:
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
     
-        camara_x = filtro["camara"]
-        x_var = filtro["x_var"]
-    
+        # SOLO activar restricciones
         st.session_state.filtros_activos = {filtro_sel}
-        st.session_state.variables_excluidas_global[camara_x] = filtro.get(
+    
+        camara_filtro = filtro["camara"]
+    
+        st.session_state.variables_excluidas_global[camara_filtro] = filtro.get(
             "variables_excluidas", []
         )
     
-        st.info(f"Cámara X fijada por filtro: {camara_x}")
+        st.info(f"Filtro activo aplicado a cámara {camara_filtro}")
         st.info(f"Variable X fijada por filtro: {x_var}")
     
     else:
