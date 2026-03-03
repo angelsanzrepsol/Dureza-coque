@@ -117,8 +117,14 @@ def extraer_codigo_camara(nombre_archivo):
     match = re.search(r"C\d{4}[A-Z]", nombre_archivo.upper())
     return match.group(0) if match else None
 
-def aplicar_exclusion_variables(df, camara):
+def aplicar_exclusion_variables(df, camara, proteger=None):
+
     excluidas = st.session_state.variables_excluidas_global.get(camara, [])
+
+    # PROTEGER columnas críticas (como la X)
+    if proteger is not None:
+        excluidas = [c for c in excluidas if c != proteger]
+
     return df.drop(columns=[c for c in excluidas if c in df.columns])
 
 def aplicar_filtros_activos(df, camara):
