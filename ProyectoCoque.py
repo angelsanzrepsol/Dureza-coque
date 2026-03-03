@@ -138,26 +138,17 @@ def aplicar_filtros_activos(df, camara):
 
         rangos = f.get("rangos", {})
 
-        st.markdown(f"### Diagnóstico del filtro: {nombre}")
-        st.write(f"Filas iniciales: {len(df)}")
-
         for variable, (vmin, vmax) in rangos.items():
 
             if variable in df.columns:
 
-                antes = len(df)
+                df_temp = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
 
-                df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
+                # Si esta variable deja 0 filas → la ignoramos
+                if df_temp.empty:
+                    continue
 
-                despues = len(df)
-
-                st.write(f"{variable}: {antes} → {despues}")
-
-                if despues == 0:
-                    st.error(
-                        f"La variable '{variable}' deja el dataset en 0 filas."
-                    )
-                    return df
+                df = df_temp
 
     return df
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
