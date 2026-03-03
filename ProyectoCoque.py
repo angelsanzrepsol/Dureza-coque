@@ -129,8 +129,6 @@ def aplicar_filtros_activos(df, camara):
     if not st.session_state.filtros_activos:
         return df
 
-    df_original = df.copy()
-
     for nombre in st.session_state.filtros_activos:
 
         f = st.session_state.filtros_guardados.get(nombre, {})
@@ -140,22 +138,27 @@ def aplicar_filtros_activos(df, camara):
 
         rangos = f.get("rangos", {})
 
+        st.markdown(f"### Diagnóstico del filtro: {nombre}")
+        st.write(f"Filas iniciales: {len(df)}")
+
         for variable, (vmin, vmax) in rangos.items():
+
             if variable in df.columns:
+
+                antes = len(df)
+
                 df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
 
-        # 🚨 CONTROL CRÍTICO
-        if df.empty:
-            st.warning(
-                f"El filtro '{nombre}' deja el dataset vacío para la cámara {camara}."
-            )
-            return df_original  # Devuelve datos sin filtrar para evitar errores
-    for variable, (vmin, vmax) in rangos.items():
-        if variable in df.columns:
-            antes = len(df)
-            df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
-            despues = len(df)
-            st.write(f"{variable}: {antes} → {despues}")
+                despues = len(df)
+
+                st.write(f"{variable}: {antes} → {despues}")
+
+                if despues == 0:
+                    st.error(
+                        f"La variable '{variable}' deja el dataset en 0 filas."
+                    )
+                    return df
+
     return df
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
 st.sidebar.header("Datos de proceso")
