@@ -542,7 +542,8 @@ with tab2:
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
     
-        camara_filtro = filtro["camara"]
+        # 🔥 Forzar cámara X igual a la del filtro
+        camara_x = filtro["camara"]
     
         # Desactivar otros filtros de esa cámara
         for n in list(st.session_state.filtros_activos):
