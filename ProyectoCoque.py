@@ -536,7 +536,10 @@ with tab2:
     )
     # FILTRO PREFIJADO
     # Selección filtro
-    filtro_sel = st.selectbox(...)
+    filtro_sel = st.selectbox(
+        "Filtro prefijado",
+        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
+    )
     
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
