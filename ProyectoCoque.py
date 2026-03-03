@@ -559,10 +559,17 @@ with tab2:
             "variables_excluidas", []
         )
     
+    else:
+        camara_x = st.selectbox(
+            "Cámara de referencia para el eje X",
+            camaras_sel
+        )
+    
         # Sin filtro activo
         st.session_state.filtros_activos.clear()
     
         x_var = None
+
     
     # ==============================
     # CALCULAR DATAFRAME DE REFERENCIA
@@ -645,27 +652,6 @@ with tab2:
         st.session_state.axis_frozen_tab2 = False
         st.session_state.axis_limits_tab2 = {}
         st.rerun()
-    # Recalcular dataframe referencia
-    df_x_ref = aplicar_exclusion_variables(
-        df_camaras_activo[camara_x],
-        camara_x
-    )
-    
-    df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
-    
-    # 🚨 PROTECCIÓN TOTAL
-    if df_x_ref.empty:
-        st.error(
-            f"El filtro activo deja el dataset vacío para la cámara {camara_x}.\n"
-            "Revise los rangos del filtro."
-        )
-        st.stop()
-    
-    if x_var not in df_x_ref.columns:
-        st.error(
-            f"La variable '{x_var}' no existe tras aplicar exclusiones."
-        )
-        st.stop()
     
     xmin = float(df_x_ref[x_var].min())
     xmax = float(df_x_ref[x_var].max())
