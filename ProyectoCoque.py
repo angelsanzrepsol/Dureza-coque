@@ -417,7 +417,14 @@ with tab_filtros:
     
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
 
-                    st.session_state.filtros_guardados[nombre]["variables_excluidas"] = vars_editadas
+                    filtro_original = st.session_state.filtros_guardados[nombre]
+
+                    st.session_state.filtros_guardados[nombre] = {
+                        "camara": filtro_original.get("camara"),
+                        "x_var": filtro_original.get("x_var"),
+                        "rangos": filtro_original.get("rangos", {}),
+                        "variables_excluidas": vars_editadas
+                    }
                 
                     # incronizar si el filtro está activo
                     if nombre in st.session_state.filtros_activos:
