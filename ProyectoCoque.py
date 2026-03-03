@@ -413,22 +413,25 @@ with tab_filtros:
                     if c != f.get("x_var")
                 ]
     
-                vars_actuales = st.session_state.filtros_guardados[nombre].get(
-                    "variables_excluidas",
-                    []
-                )
-    
+                # Clave única del widget
+                widget_key = f"edit_vars_{nombre}"
+                
+                # Inicializar SOLO si no existe
+                if widget_key not in st.session_state:
+                    st.session_state[widget_key] = st.session_state.filtros_guardados[nombre].get(
+                        "variables_excluidas",
+                        []
+                    )
+                
                 vars_editadas = st.multiselect(
                     "Variables excluidas en este filtro",
                     cols_num,
-                    default=vars_actuales,
-                    key=f"edit_vars_{nombre}"
+                    key=widget_key
                 )
     
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
-
-                    # Leer directamente del estado del widget
-                    nuevas_excluidas = st.session_state.get(f"edit_vars_{nombre}", [])
+                
+                    nuevas_excluidas = st.session_state[widget_key]
                 
                     filtro_actual = st.session_state.filtros_guardados[nombre]
                 
