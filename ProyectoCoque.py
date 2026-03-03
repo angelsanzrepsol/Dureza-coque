@@ -468,8 +468,11 @@ with tab_filtros:
                     st.rerun()
 
                 # DESCARGAR FILTRO INDIVIDUAL
-                filtro_individual = {nombre: f}
-                filtro_json = json.dumps(filtro_individual, indent=4)
+                filtro_actualizado = {
+                    nombre: st.session_state.filtros_guardados[nombre]
+                }
+                
+                filtro_json = json.dumps(filtro_actualizado, indent=4)
 
                 nombre_archivo = re.sub(
                     r"[^a-zA-Z0-9_-]",
