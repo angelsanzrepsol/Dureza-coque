@@ -635,7 +635,7 @@ with tab2:
         st.session_state.axis_frozen_tab2 = False
         st.session_state.axis_limits_tab2 = {}
         st.rerun()
-    # Recalcular df_x_ref después de activar filtro
+    # Recalcular dataframe referencia
     df_x_ref = aplicar_exclusion_variables(
         df_camaras_activo[camara_x],
         camara_x
@@ -643,9 +643,20 @@ with tab2:
     
     df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
     
-    cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
+    # 🚨 PROTECCIÓN TOTAL
+    if df_x_ref.empty:
+        st.error(
+            f"El filtro activo deja el dataset vacío para la cámara {camara_x}.\n"
+            "Revise los rangos del filtro."
+        )
+        st.stop()
     
-    # FILTRO POR X (USANDO CÁMARA DE REFERENCIA)
+    if x_var not in df_x_ref.columns:
+        st.error(
+            f"La variable '{x_var}' no existe tras aplicar exclusiones."
+        )
+        st.stop()
+    
     xmin = float(df_x_ref[x_var].min())
     xmax = float(df_x_ref[x_var].max())
 
