@@ -535,56 +535,24 @@ with tab2:
         cols_num_x
     )
     # FILTRO PREFIJADO
-    filtro_sel = st.selectbox(
-        "Filtro prefijado",
-        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
-    )
+    # Selección filtro
+    filtro_sel = st.selectbox(...)
+    
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
-    
-        # 🔥 Forzar cámara X igual a la del filtro
         camara_x = filtro["camara"]
-    
-        # Desactivar otros filtros de esa cámara
-        for n in list(st.session_state.filtros_activos):
-            if st.session_state.filtros_guardados[n]["camara"] == camara_filtro:
-                st.session_state.filtros_activos.discard(n)
-    
-        st.session_state.filtros_activos.add(filtro_sel)
-    
-        # 🚨 Forzar X del filtro
         x_var = filtro["x_var"]
-    
-        # 🚨 No permitir excluir X
-        vars_excluidas = filtro.get("variables_excluidas", [])
-        if x_var in vars_excluidas:
-            vars_excluidas.remove(x_var)
-    
-        st.session_state.variables_excluidas_global[camara_filtro] = vars_excluidas
-        x_var = filtro["x_var"]
-    if filtro_sel != "(ninguno)":
-
-        filtro = st.session_state.filtros_guardados[filtro_sel]
-        camara_filtro = filtro["camara"]
-    
-        # Limpiar filtros activos de esa cámara
-        for n in list(st.session_state.filtros_activos):
-            if st.session_state.filtros_guardados[n]["camara"] == camara_filtro:
-                st.session_state.filtros_activos.discard(n)
-    
-        # Activar el nuevo
-        st.session_state.filtros_activos.add(filtro_sel)
-    
-        # Aplicar variables excluidas
-        st.session_state.variables_excluidas_global[camara_filtro] = filtro.get(
-            "variables_excluidas",
-            []
-        )
-    
     else:
-        st.session_state.filtros_activos.clear()
-
-
+        camara_x = st.selectbox(...)
+        x_var = None
+    
+    # Ahora sí calculas df_x_ref
+    df_x_ref = aplicar_exclusion_variables(...)
+    df_x_ref = aplicar_filtros_activos(...)
+    
+    # Si no hay filtro activo eliges X manual
+    if filtro_sel == "(ninguno)":
+        x_var = st.selectbox("Variable eje X", cols_num_x)
 
     # SELECCIÓN DE Y POR CÁMARA
     st.markdown("### Selección de variables Y por cámara")
