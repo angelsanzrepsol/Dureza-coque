@@ -122,33 +122,34 @@ def aplicar_exclusion_variables(df, camara):
     return df.drop(columns=[c for c in excluidas if c in df.columns])
 
 def aplicar_filtros_activos(df, camara):
-    """
-    Aplica los rangos de los filtros activos al dataframe de una cámara.
-    """
 
-    # Si no hay filtros activos, devuelve el dataframe tal cual
     if "filtros_activos" not in st.session_state:
         return df
 
     if not st.session_state.filtros_activos:
         return df
 
-    # Recorrer todos los filtros activos
+    df_original = df.copy()
+
     for nombre in st.session_state.filtros_activos:
 
-        # Obtener el filtro guardado
         f = st.session_state.filtros_guardados.get(nombre, {})
 
-        # Comprobar que el filtro pertenece a esta cámara
         if f.get("camara") != camara:
             continue
 
-        # Aplicar rangos del filtro
         rangos = f.get("rangos", {})
 
         for variable, (vmin, vmax) in rangos.items():
             if variable in df.columns:
                 df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
+
+        # 🚨 CONTROL CRÍTICO
+        if df.empty:
+            st.warning(
+                f"El filtro '{nombre}' deja el dataset vacío para la cámara {camara}."
+            )
+            return df_original  # Devuelve datos sin filtrar para evitar errores
 
     return df
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
@@ -535,6 +536,25 @@ with tab2:
     )
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
+    
+        camara_filtro = filtro["camara"]
+    
+        # Desactivar otros filtros de esa cámara
+        for n in list(st.session_state.filtros_activos):
+            if st.session_state.filtros_guardados[n]["camara"] == camara_filtro:
+                st.session_state.filtros_activos.discard(n)
+    
+        st.session_state.filtros_activos.add(filtro_sel)
+    
+        # 🚨 Forzar X del filtro
+        x_var = filtro["x_var"]
+    
+        # 🚨 No permitir excluir X
+        vars_excluidas = filtro.get("variables_excluidas", [])
+        if x_var in vars_excluidas:
+            vars_excluidas.remove(x_var)
+    
+        st.session_state.variables_excluidas_global[camara_filtro] = vars_excluidas
         x_var = filtro["x_var"]
     if filtro_sel != "(ninguno)":
 
@@ -625,10 +645,6 @@ with tab2:
     
     cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
     
-    # Verificar que x_var sigue existiendo
-    if x_var not in cols_num_x:
-        st.warning("La variable X no está disponible tras aplicar el filtro.")
-        st.stop()
     # FILTRO POR X (USANDO CÁMARA DE REFERENCIA)
     xmin = float(df_x_ref[x_var].min())
     xmax = float(df_x_ref[x_var].max())
