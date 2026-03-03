@@ -150,7 +150,12 @@ def aplicar_filtros_activos(df, camara):
                 f"El filtro '{nombre}' deja el dataset vacío para la cámara {camara}."
             )
             return df_original  # Devuelve datos sin filtrar para evitar errores
-
+    for variable, (vmin, vmax) in rangos.items():
+        if variable in df.columns:
+            antes = len(df)
+            df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
+            despues = len(df)
+            st.write(f"{variable}: {antes} → {despues}")
     return df
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
 st.sidebar.header("Datos de proceso")
