@@ -543,17 +543,56 @@ with tab2:
     
     if filtro_sel != "(ninguno)":
         filtro = st.session_state.filtros_guardados[filtro_sel]
+    
         camara_x = filtro["camara"]
         x_var = filtro["x_var"]
+    
+        st.info(f"Filtro activo: {filtro_sel}")
+        st.info(f"Cámara X fijada por filtro: {camara_x}")
+        st.info(f"Variable X fijada por filtro: {x_var}")
+    
+        # Activar solo este filtro
+        st.session_state.filtros_activos = {filtro_sel}
+    
+        # Aplicar variables excluidas del filtro
+        st.session_state.variables_excluidas_global[camara_x] = filtro.get(
+            "variables_excluidas", []
+        )
+    
     else:
-        camara_x = st.selectbox(...)
+        camara_x = st.selectbox(
+            "Cámara de referencia para el eje X",
+            camaras_sel
+        )
+    
+        # Sin filtro activo
+        st.session_state.filtros_activos.clear()
+    
         x_var = None
     
-    # Ahora sí calculas df_x_ref
-    df_x_ref = aplicar_exclusion_variables(...)
-    df_x_ref = aplicar_filtros_activos(...)
+    # ==============================
+    # CALCULAR DATAFRAME DE REFERENCIA
+    # ==============================
     
-    # Si no hay filtro activo eliges X manual
+    df_x_ref = aplicar_exclusion_variables(
+        df_camaras_activo[camara_x],
+        camara_x,
+        proteger=x_var
+    )
+    
+    df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
+    
+    if df_x_ref.empty:
+        st.error(
+            f"El filtro activo deja el dataset vacío para la cámara {camara_x}."
+        )
+        st.stop()
+    
+    cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
+    
+    if len(cols_num_x) == 0:
+        st.error("No hay columnas numéricas disponibles.")
+        st.stop()
     if filtro_sel == "(ninguno)":
         x_var = st.selectbox("Variable eje X", cols_num_x)
 
