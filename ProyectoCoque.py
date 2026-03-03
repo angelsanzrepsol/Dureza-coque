@@ -427,18 +427,21 @@ with tab_filtros:
     
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
 
+                    # Leer directamente del estado del widget
+                    nuevas_excluidas = st.session_state.get(f"edit_vars_{nombre}", [])
+                
                     filtro_actual = st.session_state.filtros_guardados[nombre]
                 
                     st.session_state.filtros_guardados[nombre] = {
                         "camara": filtro_actual.get("camara"),
                         "x_var": filtro_actual.get("x_var"),
                         "rangos": filtro_actual.get("rangos", {}),
-                        "variables_excluidas": list(vars_editadas)
+                        "variables_excluidas": list(nuevas_excluidas)
                     }
                 
                     if nombre in st.session_state.filtros_activos:
                         camara_filtro = filtro_actual.get("camara")
-                        st.session_state.variables_excluidas_global[camara_filtro] = list(vars_editadas)
+                        st.session_state.variables_excluidas_global[camara_filtro] = list(nuevas_excluidas)
                 
                     st.success("Filtro actualizado correctamente")
                     st.rerun()
