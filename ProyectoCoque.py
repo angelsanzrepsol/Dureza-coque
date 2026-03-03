@@ -501,44 +501,28 @@ with tab2:
 
     camaras_disponibles = sorted(df_camaras_activo.keys())
 
-    # SELECCIÓN DE CÁMARAS A REPRESENTAR
+    # ==============================
+    # SELECCIÓN DE CÁMARAS
+    # ==============================
+    
     camaras_sel = st.multiselect(
         "Cámaras a representar",
         camaras_disponibles,
         default=camaras_disponibles[:1]
     )
-
+    
     if not camaras_sel:
         st.warning("Seleccione al menos una cámara.")
         st.stop()
-
-    # SELECCIÓN DE CÁMARA FUENTE DE X
-    camara_x = st.selectbox(
-        "Cámara de referencia para el eje X",
-        camaras_sel
-    )
-
-    df_x_ref = aplicar_exclusion_variables(
-        df_camaras_activo[camara_x],
-        camara_x
-    )
     
-    df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
-    cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
-
-    if len(cols_num_x) < 1:
-        st.error("La cámara de referencia no tiene columnas numéricas.")
-        st.stop()
-
-    x_var = st.selectbox(
-        "Variable eje X (común)",
-        cols_num_x
-    )
-    # FILTRO PREFIJADO
-    # Selección filtro
+    # ==============================
+    # SELECCIÓN DE FILTRO
+    # ==============================
+    
     filtro_sel = st.selectbox(
         "Filtro prefijado",
-        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
+        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys()),
+        key="filtro_tab2"
     )
     
     if filtro_sel != "(ninguno)":
@@ -547,32 +531,26 @@ with tab2:
         camara_x = filtro["camara"]
         x_var = filtro["x_var"]
     
-        st.info(f"Filtro activo: {filtro_sel}")
-        st.info(f"Cámara X fijada por filtro: {camara_x}")
-        st.info(f"Variable X fijada por filtro: {x_var}")
-    
-        # Activar solo este filtro
         st.session_state.filtros_activos = {filtro_sel}
-    
-        # Aplicar variables excluidas del filtro
         st.session_state.variables_excluidas_global[camara_x] = filtro.get(
             "variables_excluidas", []
         )
     
+        st.info(f"Cámara X fijada por filtro: {camara_x}")
+        st.info(f"Variable X fijada por filtro: {x_var}")
+    
     else:
         camara_x = st.selectbox(
             "Cámara de referencia para el eje X",
-            camaras_sel
+            camaras_sel,
+            key="camara_x_tab2"
         )
     
-        # Sin filtro activo
         st.session_state.filtros_activos.clear()
-    
         x_var = None
-
     
     # ==============================
-    # CALCULAR DATAFRAME DE REFERENCIA
+    # DATAFRAME DE REFERENCIA
     # ==============================
     
     df_x_ref = aplicar_exclusion_variables(
@@ -584,18 +562,25 @@ with tab2:
     df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
     
     if df_x_ref.empty:
-        st.error(
-            f"El filtro activo deja el dataset vacío para la cámara {camara_x}."
-        )
+        st.error(f"El filtro deja vacío el dataset para {camara_x}.")
         st.stop()
     
     cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
     
-    if len(cols_num_x) == 0:
+    if not cols_num_x:
         st.error("No hay columnas numéricas disponibles.")
         st.stop()
+    
     if filtro_sel == "(ninguno)":
-        x_var = st.selectbox("Variable eje X", cols_num_x)
+        x_var = st.selectbox(
+            "Variable eje X",
+            cols_num_x,
+            key="x_var_tab2"
+        )
+    else:
+        if x_var not in cols_num_x:
+            st.error(f"La variable '{x_var}' no existe en la cámara {camara_x}.")
+            st.stop()    
 
     # SELECCIÓN DE Y POR CÁMARA
     st.markdown("### Selección de variables Y por cámara")
