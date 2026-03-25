@@ -1015,7 +1015,10 @@ with tab3:
         st.stop()
 
     # PREPARACIÓN DE DATOS
-    df_base = df[X_cols + [y_obj]].dropna()
+    df_base = df[X_cols + [y_obj]].copy()
+    
+    # 🔥 eliminar solo filas sin Y (lo importante)
+    df_base = df_base.dropna(subset=[y_obj])
 
     if len(df_base) < 20:
         st.warning("Datos insuficientes tras filtros y exclusiones")
@@ -1095,7 +1098,8 @@ with tab3:
 
     # TABLA CUANTITATIVA
     st.markdown("### Métricas cuantitativas de correlación")
-
+    # convertir todo a numérico (MUY IMPORTANTE)
+    df_base = df_base.apply(pd.to_numeric, errors="coerce")
     st.dataframe(
         df_rank[[
             "Variable",
