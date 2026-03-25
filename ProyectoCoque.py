@@ -1032,6 +1032,21 @@ with tab3:
     from sklearn.linear_model import LinearRegression
     import numpy as np
 
+    # 🔥 CONVERTIR A NUMÉRICO
+    X = X.apply(pd.to_numeric, errors="coerce")
+    y = pd.to_numeric(y, errors="coerce")
+    
+    # 🔥 ELIMINAR FILAS CON NaN SOLO EN VARIABLES NECESARIAS
+    df_clean = pd.concat([X, y], axis=1).dropna()
+    
+    if len(df_clean) < 20:
+        st.warning("Datos insuficientes tras limpieza (NaN)")
+        st.stop()
+    
+    X = df_clean[X.columns]
+    y = df_clean[y.name]
+    
+    # 🔥 AHORA SÍ (seguro)
     mi = mutual_info_regression(X, y, random_state=42)
 
     resultados = []
