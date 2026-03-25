@@ -158,10 +158,10 @@ def aplicar_filtros_activos(df, camara):
 
     return df
 def detectar_columna_camara(df):
-    posibles = ["camara", "cámara", "camera", "horno"]
-
     for col in df.columns:
-        if col.lower() in posibles:
+        col_clean = str(col).strip().lower()
+
+        if "cam" in col_clean or "horno" in col_clean:
             return col
 
     return None
