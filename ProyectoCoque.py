@@ -320,7 +320,18 @@ with tab1:
         if y == x_var:
             continue
 
-        ymin, ymax = float(df[y].min()), float(df[y].max())
+        col_data = pd.to_numeric(df[y], errors="coerce").dropna()
+
+        if col_data.empty:
+            st.warning(f"{y}: sin datos válidos")
+            continue
+        
+        ymin = float(col_data.min())
+        ymax = float(col_data.max())
+        
+        if ymin == ymax:
+            st.info(f"{y}: valor constante ({ymin})")
+            continue
         rmin, rmax = st.slider(
             f"{y}",
             ymin, ymax,
