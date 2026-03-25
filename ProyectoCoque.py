@@ -121,6 +121,43 @@ def aplicar_exclusion_variables(df, camara):
     excluidas = st.session_state.variables_excluidas_global.get(camara, [])
     return df.drop(columns=[c for c in excluidas if c in df.columns])
 
+def dividir_por_camara(df, nombre_archivo):
+    """
+    Detecta si la primera columna contiene cámaras.
+    Si es así, separa el dataframe en varias cámaras.
+    """
+
+    primera_col = df.columns[0]
+
+    # Convertimos a string por seguridad
+    valores = df[primera_col].astype(str)
+
+    valores_unicos = valores.dropna().unique()
+
+    # CRITERIO: pocos valores únicos = probablemente cámaras
+    if 1 < len(valores_unicos) <= 10:
+
+        camaras_dict = {}
+
+        for cam in valores_unicos:
+            df_cam = df[valores == cam].copy()
+
+            # Quitamos la columna de cámara
+            df_cam = df_cam.drop(columns=[primera_col])
+
+            camaras_dict[str(cam)] = df_cam
+
+        return camaras_dict
+
+    else:
+        # Modo antiguo
+        camara = extraer_codigo_camara(nombre_archivo)
+
+        if camara is None:
+            camara = "CAMARA_UNICA"
+
+        return {camara: df}
+
 def aplicar_filtros_activos(df, camara):
     """
     Aplica los rangos de los filtros activos al dataframe de una cámara.
@@ -207,25 +244,30 @@ if uploaded_files:
 
         try:
             df = pd.read_excel(uploaded_file)
-
+            
             if df is None or df.empty:
-                st.sidebar.warning(
-                    f"{nombre} está vacío (se ignora)"
-                )
+                st.sidebar.warning(f"{nombre} está vacío (se ignora)")
                 continue
-
-            # Guardar estados
-            st.session_state.df_camaras_original[camara] = df.copy()
-            st.session_state.df_camaras_activo[camara] = df.copy()
-            st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(
-                columns=df.columns
-            )
-            st.session_state.variables_excluidas_global[camara] = []
-
-            st.sidebar.success(
-                f"Cargado {nombre}\nCámara detectada: {camara}"
-            )
-
+            
+            # dividir por cámara automáticamente
+            camaras_detectadas = dividir_por_camara(df, nombre)
+            
+            for camara, df_cam in camaras_detectadas.items():
+            
+                if camara in st.session_state.df_camaras_original:
+                    st.sidebar.info(f"La cámara {camara} ya está cargada")
+                    continue
+            
+                st.session_state.df_camaras_original[camara] = df_cam.copy()
+                st.session_state.df_camaras_activo[camara] = df_cam.copy()
+                st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(
+                    columns=df_cam.columns
+                )
+                st.session_state.variables_excluidas_global[camara] = []
+            
+                st.sidebar.success(
+                    f"{nombre} → Cámara detectada: {camara}"
+                )
         except Exception as e:
             st.sidebar.error(
                 f"Error leyendo {nombre}: {e}"
