@@ -109,7 +109,19 @@ def leer_datos_csv(uploaded_file):
     except Exception:
         return None
 
-
+def obtener_rango_seguro(serie):
+    serie = serie.dropna()
+    
+    if serie.empty:
+        return None, None
+    
+    ymin = float(serie.min())
+    ymax = float(serie.max())
+    
+    if ymin == ymax:
+        return None, None
+    
+    return ymin, ymax
 def extraer_codigo_camara(nombre_archivo):
     """
     Extrae códigos tipo C0004A, C0005B, etc. del nombre del archivo.
@@ -332,7 +344,11 @@ with tab1:
         if y == x_var:
             continue
 
-        ymin, ymax = float(df[y].min()), float(df[y].max())
+        ymin, ymax = obtener_rango_seguro(df[y])
+        
+        if ymin is None:
+            st.info(f"{y}: no válido")
+            continue
         rmin, rmax = st.slider(
             f"{y}",
             ymin, ymax,
