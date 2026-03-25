@@ -227,21 +227,6 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         nombre = uploaded_file.name
 
-        camara = extraer_codigo_camara(nombre)
-
-        if camara is None:
-            st.sidebar.warning(
-                f"No se detectó cámara en {nombre} (se ignora)"
-            )
-            continue
-
-        # Evitar cargar dos veces la misma cámara
-        if camara in st.session_state.df_camaras_original:
-            st.sidebar.info(
-                f"La cámara {camara} ya está cargada"
-            )
-            continue
-
         try:
             df = pd.read_excel(uploaded_file)
             
