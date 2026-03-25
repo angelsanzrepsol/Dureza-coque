@@ -117,44 +117,38 @@ def extraer_codigo_camara(nombre_archivo):
     match = re.search(r"C\d{4}[A-Z]", nombre_archivo.upper())
     return match.group(0) if match else None
 
-def aplicar_exclusion_variables(df, camara, proteger=None):
-
+def aplicar_exclusion_variables(df, camara):
     excluidas = st.session_state.variables_excluidas_global.get(camara, [])
-
-    # PROTEGER columnas críticas (como la X)
-    if proteger is not None:
-        excluidas = [c for c in excluidas if c != proteger]
-
     return df.drop(columns=[c for c in excluidas if c in df.columns])
 
 def aplicar_filtros_activos(df, camara):
+    """
+    Aplica los rangos de los filtros activos al dataframe de una cámara.
+    """
 
+    # Si no hay filtros activos, devuelve el dataframe tal cual
     if "filtros_activos" not in st.session_state:
         return df
 
     if not st.session_state.filtros_activos:
         return df
 
+    # Recorrer todos los filtros activos
     for nombre in st.session_state.filtros_activos:
 
+        # Obtener el filtro guardado
         f = st.session_state.filtros_guardados.get(nombre, {})
 
+        # Comprobar que el filtro pertenece a esta cámara
         if f.get("camara") != camara:
             continue
 
+        # Aplicar rangos del filtro
         rangos = f.get("rangos", {})
 
         for variable, (vmin, vmax) in rangos.items():
-
             if variable in df.columns:
-
-                df_temp = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
-
-                # Si esta variable deja 0 filas → la ignoramos
-                if df_temp.empty:
-                    continue
-
-                df = df_temp
+                df = df[(df[variable] >= vmin) & (df[variable] <= vmax)]
 
     return df
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
@@ -361,14 +355,7 @@ with tab_filtros:
 
             if isinstance(filtros_importados, dict):
                 for nombre, filtro in filtros_importados.items():
-
-                    # Forzar estructura completa del filtro
-                    st.session_state.filtros_guardados[nombre] = {
-                        "camara": filtro.get("camara"),
-                        "x_var": filtro.get("x_var"),
-                        "rangos": filtro.get("rangos", {}),
-                        "variables_excluidas": filtro.get("variables_excluidas", [])
-                    }
+                    st.session_state.filtros_guardados[nombre] = filtro
 
                 st.success("Filtros importados correctamente")
             else:
@@ -408,47 +395,23 @@ with tab_filtros:
                     continue
 
 
-                cols_num = [
-                    c for c in df_original.select_dtypes(include="number").columns.tolist()
-                    if c != f.get("x_var")
-                ]
+                cols_num = df_original.select_dtypes(include="number").columns.tolist()
     
-                # Clave única del widget
-                widget_key = f"edit_vars_{nombre}"
-                
-                # Inicializar SOLO si no existe
-                if widget_key not in st.session_state:
-                    st.session_state[widget_key] = st.session_state.filtros_guardados[nombre].get(
-                        "variables_excluidas",
-                        []
-                    )
-                
+                vars_actuales = f.get("variables_excluidas", [])
+    
                 vars_editadas = st.multiselect(
                     "Variables excluidas en este filtro",
                     cols_num,
-                    key=widget_key
+                    default=vars_actuales,
+                    key=f"edit_vars_{nombre}"
                 )
     
+                # BOTÓN QUE TE FALTA
                 if st.button("Guardar cambios", key=f"save_vars_{nombre}"):
-                
-                    nuevas_excluidas = st.session_state[widget_key]
-                
-                    filtro_actual = st.session_state.filtros_guardados[nombre]
-                
-                    st.session_state.filtros_guardados[nombre] = {
-                        "camara": filtro_actual.get("camara"),
-                        "x_var": filtro_actual.get("x_var"),
-                        "rangos": filtro_actual.get("rangos", {}),
-                        "variables_excluidas": list(nuevas_excluidas)
-                    }
-                
-                    if nombre in st.session_state.filtros_activos:
-                        camara_filtro = filtro_actual.get("camara")
-                        st.session_state.variables_excluidas_global[camara_filtro] = list(nuevas_excluidas)
-                
+    
+                    st.session_state.filtros_guardados[nombre]["variables_excluidas"] = vars_editadas
+    
                     st.success("Filtro actualizado correctamente")
-                    st.rerun()
-
 
 
                 col1, col2, col3 = st.columns(3)
@@ -490,11 +453,8 @@ with tab_filtros:
                     st.rerun()
 
                 # DESCARGAR FILTRO INDIVIDUAL
-                filtro_actualizado = {
-                    nombre: st.session_state.filtros_guardados[nombre]
-                }
-                
-                filtro_json = json.dumps(filtro_actualizado, indent=4)
+                filtro_individual = {nombre: f}
+                filtro_json = json.dumps(filtro_individual, indent=4)
 
                 nombre_archivo = re.sub(
                     r"[^a-zA-Z0-9_-]",
@@ -526,85 +486,68 @@ with tab2:
 
     camaras_disponibles = sorted(df_camaras_activo.keys())
 
-    # ==============================
-    # SELECCIÓN DE CÁMARAS
-    # ==============================
-    
+    # SELECCIÓN DE CÁMARAS A REPRESENTAR
     camaras_sel = st.multiselect(
         "Cámaras a representar",
         camaras_disponibles,
         default=camaras_disponibles[:1]
     )
-    
+
     if not camaras_sel:
         st.warning("Seleccione al menos una cámara.")
         st.stop()
-    
-    # ==============================
-    # SELECCIÓN DE FILTRO
-    # ==============================
-    
-    filtro_sel = st.selectbox(
-        "Filtro prefijado",
-        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys()),
-        key="filtro_tab2"
-    )
-    
-    if filtro_sel != "(ninguno)":
-        filtro = st.session_state.filtros_guardados[filtro_sel]
-    
-        st.session_state.filtros_activos = {filtro_sel}
-    
-        camara_filtro = filtro["camara"]
-    
-        st.session_state.variables_excluidas_global[camara_filtro] = filtro.get(
-            "variables_excluidas", []
-        )
-    
-        st.info(f"Filtro activo aplicado a cámara {camara_filtro}")
-    else:
-        st.session_state.filtros_activos.clear()
-    
-    # ==============================
-    # DEFINIR SIEMPRE CÁMARA X
-    # ==============================
-    
+
+    # SELECCIÓN DE CÁMARA FUENTE DE X
     camara_x = st.selectbox(
         "Cámara de referencia para el eje X",
-        camaras_sel,
-        key="camara_x_tab2"
+        camaras_sel
     )
-    
-    # ==============================
-    # DATAFRAME REFERENCIA
-    # ==============================
-    
+
     df_x_ref = aplicar_exclusion_variables(
         df_camaras_activo[camara_x],
         camara_x
     )
     
     df_x_ref = aplicar_filtros_activos(df_x_ref, camara_x)
-    
-    if df_x_ref.empty:
-        st.error(f"El filtro deja vacío el dataset para {camara_x}.")
-        st.stop()
-    
     cols_num_x = df_x_ref.select_dtypes(include="number").columns.tolist()
-    
-    if not cols_num_x:
-        st.error("No hay columnas numéricas disponibles.")
+
+    if len(cols_num_x) < 1:
+        st.error("La cámara de referencia no tiene columnas numéricas.")
         st.stop()
-    
-    # ==============================
-    # VARIABLE X LIBRE SIEMPRE
-    # ==============================
-    
+
     x_var = st.selectbox(
-        "Variable eje X",
-        cols_num_x,
-        key="x_var_tab2"
-    ) 
+        "Variable eje X (común)",
+        cols_num_x
+    )
+    # FILTRO PREFIJADO
+    filtro_sel = st.selectbox(
+        "Filtro prefijado",
+        ["(ninguno)"] + list(st.session_state.filtros_guardados.keys())
+    )
+    
+    if filtro_sel != "(ninguno)":
+
+        filtro = st.session_state.filtros_guardados[filtro_sel]
+        camara_filtro = filtro["camara"]
+    
+        # Limpiar filtros activos de esa cámara
+        for n in list(st.session_state.filtros_activos):
+            if st.session_state.filtros_guardados[n]["camara"] == camara_filtro:
+                st.session_state.filtros_activos.discard(n)
+    
+        # Activar el nuevo
+        st.session_state.filtros_activos.add(filtro_sel)
+    
+        # Aplicar variables excluidas
+        st.session_state.variables_excluidas_global[camara_filtro] = filtro.get(
+            "variables_excluidas",
+            []
+        )
+    
+    else:
+        st.session_state.filtros_activos.clear()
+
+
 
     # SELECCIÓN DE Y POR CÁMARA
     st.markdown("### Selección de variables Y por cámara")
@@ -661,7 +604,8 @@ with tab2:
         st.session_state.axis_frozen_tab2 = False
         st.session_state.axis_limits_tab2 = {}
         st.rerun()
-    
+
+    # FILTRO POR X (USANDO CÁMARA DE REFERENCIA)
     xmin = float(df_x_ref[x_var].min())
     xmax = float(df_x_ref[x_var].max())
 
