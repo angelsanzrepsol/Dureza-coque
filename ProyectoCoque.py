@@ -157,14 +157,6 @@ def aplicar_filtros_activos(df, camara):
                 df = df_temp
 
     return df
-def detectar_columna_camara(df):
-    for col in df.columns:
-        col_clean = str(col).strip().lower()
-
-        if "cam" in col_clean or "horno" in col_clean:
-            return col
-
-    return None
 # SIDEBAR — CARGA DE DATOS DE PROCESO (VARIOS EXCEL = VARIAS CÁMARAS)
 st.sidebar.header("Datos de proceso")
 
@@ -204,80 +196,79 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         nombre = uploaded_file.name
 
-        camara = extraer_codigo_camara(nombre)
-
-        if camara is None:
-            st.sidebar.warning(
-                f"No se detectó cámara en {nombre} (se ignora)"
-            )
-            continue
-
-        # Evitar cargar dos veces la misma cámara
-        if camara in st.session_state.df_camaras_original:
-            st.sidebar.info(
-                f"La cámara {camara} ya está cargada"
-            )
-            continue
-
         try:
             df = pd.read_excel(uploaded_file)
-            
+
             if df is None or df.empty:
                 st.sidebar.warning(f"{nombre} está vacío (se ignora)")
                 continue
-            
-            # 🔍 Detectar si hay columna de cámara
-            col_camara = detectar_columna_camara(df)
-            
+
+            # 🔥 LIMPIAR COLUMNAS (MUY IMPORTANTE)
+            df.columns = df.columns.astype(str).str.strip()
+
+            # 🔍 DETECTAR SI EXISTE COLUMNA CAMARA
+            col_camara = None
+            for col in df.columns:
+                if "cam" in col.lower():
+                    col_camara = col
+                    break
+
             if col_camara:
                 # =========================================
-                # FORMATO NUEVO: varias cámaras en un Excel
+                # FORMATO NUEVO → CAMARAS DENTRO DEL EXCEL
                 # =========================================
-                for camara_val in df[col_camara].dropna().unique():
-            
-                    camara_str = str(camara_val).upper()
-            
-                    df_cam = df[df[col_camara] == camara_val].copy()
-            
+
+                df[col_camara] = df[col_camara].astype(str).str.strip().str.upper()
+
+                camaras_unicas = df[col_camara].dropna().unique()
+
+                for cam in camaras_unicas:
+
+                    df_cam = df[df[col_camara] == cam].copy()
+
                     if df_cam.empty:
                         continue
-            
-                    if camara_str in st.session_state.df_camaras_original:
-                        st.sidebar.info(f"La cámara {camara_str} ya está cargada")
+
+                    # 🔥 ELIMINAR COLUMNA CAMARA
+                    df_cam = df_cam.drop(columns=[col_camara])
+
+                    if cam in st.session_state.df_camaras_original:
+                        st.sidebar.info(f"La cámara {cam} ya está cargada")
                         continue
-            
-                    st.session_state.df_camaras_original[camara_str] = df_cam
-                    st.session_state.df_camaras_activo[camara_str] = df_cam.copy()
-                    st.session_state.df_camaras_eliminados[camara_str] = pd.DataFrame(columns=df_cam.columns)
-                    st.session_state.variables_excluidas_global[camara_str] = []
-            
-                    st.sidebar.success(f"{nombre} → Cámara detectada en columna: {camara_str}")
-            
+
+                    st.session_state.df_camaras_original[cam] = df_cam
+                    st.session_state.df_camaras_activo[cam] = df_cam.copy()
+                    st.session_state.df_camaras_eliminados[cam] = pd.DataFrame(columns=df_cam.columns)
+                    st.session_state.variables_excluidas_global[cam] = []
+
+                    st.sidebar.success(f"{nombre} → Cámara detectada: {cam}")
+
             else:
                 # =========================================
-                # FORMATO ANTIGUO: cámara en nombre archivo
+                # FORMATO ANTIGUO → CAMARA EN NOMBRE
                 # =========================================
+
                 camara = extraer_codigo_camara(nombre)
-            
+
                 if camara is None:
-                    st.sidebar.warning(f"No se detectó cámara en {nombre} (se ignora)")
+                    st.sidebar.warning(
+                        f"No se detectó cámara en {nombre} (ni en columna ni en nombre)"
+                    )
                     continue
-            
+
                 if camara in st.session_state.df_camaras_original:
                     st.sidebar.info(f"La cámara {camara} ya está cargada")
                     continue
-            
+
                 st.session_state.df_camaras_original[camara] = df.copy()
                 st.session_state.df_camaras_activo[camara] = df.copy()
                 st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(columns=df.columns)
                 st.session_state.variables_excluidas_global[camara] = []
-            
-                st.sidebar.success(f"Cargado {nombre} → Cámara: {camara}")
+
+                st.sidebar.success(f"{nombre} → Cámara detectada: {camara}")
 
         except Exception as e:
-            st.sidebar.error(
-                f"Error leyendo {nombre}: {e}"
-            )
+            st.sidebar.error(f"Error leyendo {nombre}: {e}")
 
 if not st.session_state.df_camaras_original:
     st.sidebar.info("No hay cámaras cargadas todavía")
