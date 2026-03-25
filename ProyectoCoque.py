@@ -109,19 +109,7 @@ def leer_datos_csv(uploaded_file):
     except Exception:
         return None
 
-def obtener_rango_seguro(serie):
-    serie = serie.dropna()
-    
-    if serie.empty:
-        return None, None
-    
-    ymin = float(serie.min())
-    ymax = float(serie.max())
-    
-    if ymin == ymax:
-        return None, None
-    
-    return ymin, ymax
+
 def extraer_codigo_camara(nombre_archivo):
     """
     Extrae códigos tipo C0004A, C0005B, etc. del nombre del archivo.
@@ -208,79 +196,46 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         nombre = uploaded_file.name
 
+        camara = extraer_codigo_camara(nombre)
+
+        if camara is None:
+            st.sidebar.warning(
+                f"No se detectó cámara en {nombre} (se ignora)"
+            )
+            continue
+
+        # Evitar cargar dos veces la misma cámara
+        if camara in st.session_state.df_camaras_original:
+            st.sidebar.info(
+                f"La cámara {camara} ya está cargada"
+            )
+            continue
+
         try:
             df = pd.read_excel(uploaded_file)
 
             if df is None or df.empty:
-                st.sidebar.warning(f"{nombre} está vacío (se ignora)")
+                st.sidebar.warning(
+                    f"{nombre} está vacío (se ignora)"
+                )
                 continue
 
-            # 🔥 LIMPIAR COLUMNAS (MUY IMPORTANTE)
-            df.columns = df.columns.astype(str).str.strip()
+            # Guardar estados
+            st.session_state.df_camaras_original[camara] = df.copy()
+            st.session_state.df_camaras_activo[camara] = df.copy()
+            st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(
+                columns=df.columns
+            )
+            st.session_state.variables_excluidas_global[camara] = []
 
-            # 🔍 DETECTAR SI EXISTE COLUMNA CAMARA
-            col_camara = None
-            for col in df.columns:
-                if "cam" in col.lower():
-                    col_camara = col
-                    break
-
-            if col_camara:
-                # =========================================
-                # FORMATO NUEVO → CAMARAS DENTRO DEL EXCEL
-                # =========================================
-
-                df[col_camara] = df[col_camara].astype(str).str.strip().str.upper()
-
-                camaras_unicas = df[col_camara].dropna().unique()
-
-                for cam in camaras_unicas:
-
-                    df_cam = df[df[col_camara] == cam].copy()
-
-                    if df_cam.empty:
-                        continue
-
-                    # 🔥 ELIMINAR COLUMNA CAMARA
-                    df_cam = df_cam.drop(columns=[col_camara])
-
-                    if cam in st.session_state.df_camaras_original:
-                        st.sidebar.info(f"La cámara {cam} ya está cargada")
-                        continue
-
-                    st.session_state.df_camaras_original[cam] = df_cam
-                    st.session_state.df_camaras_activo[cam] = df_cam.copy()
-                    st.session_state.df_camaras_eliminados[cam] = pd.DataFrame(columns=df_cam.columns)
-                    st.session_state.variables_excluidas_global[cam] = []
-
-                    st.sidebar.success(f"{nombre} → Cámara detectada: {cam}")
-
-            else:
-                # =========================================
-                # FORMATO ANTIGUO → CAMARA EN NOMBRE
-                # =========================================
-
-                camara = extraer_codigo_camara(nombre)
-
-                if camara is None:
-                    st.sidebar.warning(
-                        f"No se detectó cámara en {nombre} (ni en columna ni en nombre)"
-                    )
-                    continue
-
-                if camara in st.session_state.df_camaras_original:
-                    st.sidebar.info(f"La cámara {camara} ya está cargada")
-                    continue
-
-                st.session_state.df_camaras_original[camara] = df.copy()
-                st.session_state.df_camaras_activo[camara] = df.copy()
-                st.session_state.df_camaras_eliminados[camara] = pd.DataFrame(columns=df.columns)
-                st.session_state.variables_excluidas_global[camara] = []
-
-                st.sidebar.success(f"{nombre} → Cámara detectada: {camara}")
+            st.sidebar.success(
+                f"Cargado {nombre}\nCámara detectada: {camara}"
+            )
 
         except Exception as e:
-            st.sidebar.error(f"Error leyendo {nombre}: {e}")
+            st.sidebar.error(
+                f"Error leyendo {nombre}: {e}"
+            )
 
 if not st.session_state.df_camaras_original:
     st.sidebar.info("No hay cámaras cargadas todavía")
@@ -344,11 +299,7 @@ with tab1:
         if y == x_var:
             continue
 
-        ymin, ymax = obtener_rango_seguro(df[y])
-        
-        if ymin is None:
-            st.info(f"{y}: no válido")
-            continue
+        ymin, ymax = float(df[y].min()), float(df[y].max())
         rmin, rmax = st.slider(
             f"{y}",
             ymin, ymax,
@@ -1015,10 +966,7 @@ with tab3:
         st.stop()
 
     # PREPARACIÓN DE DATOS
-    df_base = df[X_cols + [y_obj]].copy()
-    
-    # 🔥 eliminar solo filas sin Y (lo importante)
-    df_base = df_base.dropna(subset=[y_obj])
+    df_base = df[X_cols + [y_obj]].dropna()
 
     if len(df_base) < 20:
         st.warning("Datos insuficientes tras filtros y exclusiones")
@@ -1032,21 +980,6 @@ with tab3:
     from sklearn.linear_model import LinearRegression
     import numpy as np
 
-    # 🔥 CONVERTIR A NUMÉRICO
-    X = X.apply(pd.to_numeric, errors="coerce")
-    y = pd.to_numeric(y, errors="coerce")
-    
-    # 🔥 ELIMINAR FILAS CON NaN SOLO EN VARIABLES NECESARIAS
-    df_clean = pd.concat([X, y], axis=1).dropna()
-    
-    if len(df_clean) < 20:
-        st.warning("Datos insuficientes tras limpieza (NaN)")
-        st.stop()
-    
-    X = df_clean[X.columns]
-    y = df_clean[y.name]
-    
-    # 🔥 AHORA SÍ (seguro)
     mi = mutual_info_regression(X, y, random_state=42)
 
     resultados = []
@@ -1113,8 +1046,7 @@ with tab3:
 
     # TABLA CUANTITATIVA
     st.markdown("### Métricas cuantitativas de correlación")
-    # convertir todo a numérico (MUY IMPORTANTE)
-    df_base = df_base.apply(pd.to_numeric, errors="coerce")
+
     st.dataframe(
         df_rank[[
             "Variable",
