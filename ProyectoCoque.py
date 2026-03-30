@@ -946,7 +946,28 @@ with tab3:
     if len(X_cols) < 1:
         st.warning("No quedan variables para analizar tras la exclusión")
         st.stop()
-
+    # 1. QUEDARSE SOLO CON VARIABLES CON DATOS
+    df_temp = df[X_cols + [y_obj]].copy()
+    
+    # eliminar columnas con demasiados NaN (ej: más del 50%)
+    umbral_nan = 0.5
+    
+    cols_validas = [
+        col for col in df_temp.columns
+        if df_temp[col].isna().mean() < umbral_nan
+    ]
+    
+    df_temp = df_temp[cols_validas]
+    
+    # separar X e y de nuevo
+    if y_obj not in df_temp.columns:
+        st.error("La variable objetivo tiene demasiados NaN")
+        st.stop()
+    
+    X_cols = [c for c in cols_validas if c != y_obj]
+    
+    # 2. AHORA SÍ limpiar filas (pero ya con columnas buenas)
+    df_base = df_temp.dropna()
     # PREPARACIÓN DE DATOS
     df_base = df[X_cols + [y_obj]].dropna()
 
