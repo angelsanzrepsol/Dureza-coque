@@ -1170,7 +1170,27 @@ with tab4:
     from sklearn.linear_model import LinearRegression
     import numpy as np
 
-    df_rank_base = df[posibles_x + [y_obj]].dropna()
+    # LIMPIEZA INTELIGENTE PARA RANKING
+    df_temp = df[posibles_x + [y_obj]].copy()
+    
+    umbral_nan = 0.5
+    
+    cols_validas = [
+        col for col in df_temp.columns
+        if df_temp[col].isna().mean() < umbral_nan
+    ]
+    
+    df_temp = df_temp[cols_validas]
+    
+    if y_obj not in df_temp.columns:
+        st.error("La variable objetivo tiene demasiados NaN")
+        st.stop()
+    
+    posibles_x = [c for c in cols_validas if c != y_obj]
+    
+    df_rank_base = df_temp.dropna()
+    
+    st.write("Filas para ranking:", len(df_rank_base))
 
     if len(df_rank_base) < 30:
         st.warning("Datos insuficientes para entrenar modelos fiables")
