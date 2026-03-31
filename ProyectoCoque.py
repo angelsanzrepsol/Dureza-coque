@@ -1426,24 +1426,61 @@ with tab4:
     ])
     import cvxpy as cp
 
+    # =========================
+    # LIMPIEZA DE DATOS (CRÍTICO)
+    # =========================
+    
+    X_opt = np.array(X_opt, dtype=float)
+    Y_real = np.array(Y_real, dtype=float)
+    
+    # =========================
+    # PREDICCIÓN ML CORRECTA
+    # =========================
+    
+    Y_ml = modelo_best.predict(X_opt).reshape(-1, 1)
+    
+    # Si múltiples targets → repetir correctamente
+    if len(targets_opt) > 1:
+        Y_ml = np.tile(Y_ml, (1, len(targets_opt)))
+    
+    # =========================
+    # VARIABLE
+    # =========================
+    
     p = X_opt.shape[1]
     k = Y_ml.shape[1]
     
     A = cp.Variable((p, k))
     
-    lambda_reg = 0.01
+    # =========================
+    # FUNCIÓN OBJETIVO (QP PURO)
+    # =========================
     
     objective = cp.Minimize(
         cp.sum_squares(X_opt @ A - Y_ml) +
-        lambda_reg * cp.norm(A, "fro")
+        0.01 * cp.sum_squares(A)
     )
+    
+    # =========================
+    # RESTRICCIONES (SIMPLES)
+    # =========================
     
     constraints = [
         A >= 0
     ]
     
+    # =========================
+    # PROBLEMA
+    # =========================
+    
     problem = cp.Problem(objective, constraints)
-    problem.solve(solver=cp.OSQP)
+    
+    # DEBUG
+    st.write("Es DCP:", problem.is_dcp())
+    st.write("Es QP:", problem.is_qp())
+    
+    # SOLVER
+    problem.solve(solver=cp.OSQP, verbose=False)
     
     A_opt = A.value
     Y_pred_opt = X_opt @ A_opt
