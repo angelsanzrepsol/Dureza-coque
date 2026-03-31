@@ -1198,7 +1198,22 @@ with tab4:
 
     X_rank = df_rank_base[posibles_x]
     y_rank = df_rank_base[y_obj]
-
+    # LIMPIEZA FINAL PARA SKLEARN (CRÍTICO)
+    X_rank = X_rank.apply(pd.to_numeric, errors="coerce")
+    y_rank = pd.to_numeric(y_rank, errors="coerce")
+    
+    # quitar infinitos
+    X_rank = X_rank.replace([np.inf, -np.inf], np.nan)
+    y_rank = y_rank.replace([np.inf, -np.inf], np.nan)
+    
+    # quitar NaN finales
+    df_clean = pd.concat([X_rank, y_rank], axis=1).dropna()
+    
+    X_rank = df_clean[X_rank.columns]
+    y_rank = df_clean[y_rank.name]
+    
+    # DEBUG
+    st.write("Filas finales para MI:", len(X_rank))
     mi = mutual_info_regression(X_rank, y_rank, random_state=42)
 
     ranking = []
