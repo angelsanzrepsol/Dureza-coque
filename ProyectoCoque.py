@@ -1170,7 +1170,27 @@ with tab4:
     from sklearn.linear_model import LinearRegression
     import numpy as np
 
-    df_rank_base = df[posibles_x + [y_obj]].dropna()
+    # LIMPIEZA INTELIGENTE PARA RANKING
+    df_temp = df[posibles_x + [y_obj]].copy()
+    
+    umbral_nan = 0.5
+    
+    cols_validas = [
+        col for col in df_temp.columns
+        if df_temp[col].isna().mean() < umbral_nan
+    ]
+    
+    df_temp = df_temp[cols_validas]
+    
+    if y_obj not in df_temp.columns:
+        st.error("La variable objetivo tiene demasiados NaN")
+        st.stop()
+    
+    posibles_x = [c for c in cols_validas if c != y_obj]
+    
+    df_rank_base = df_temp.dropna()
+    
+    st.write("Filas para ranking:", len(df_rank_base))
 
     if len(df_rank_base) < 30:
         st.warning("Datos insuficientes para entrenar modelos fiables")
@@ -1240,7 +1260,36 @@ with tab4:
     st.write("Variables finales del modelo:", X_cols)
 
     # PREPARACIÓN FINAL DE DATOS
-    df_model = df[X_cols + [y_obj]].dropna()
+    # LIMPIEZA INTELIGENTE PARA MODELO
+    df_temp = df[X_cols + [y_obj]].copy()
+    
+    umbral_nan = 0.5
+    
+    cols_validas = [
+        col for col in df_temp.columns
+        if df_temp[col].isna().mean() < umbral_nan
+    ]
+    
+    cols_eliminadas = set(df_temp.columns) - set(cols_validas)
+    
+    if cols_eliminadas:
+        st.warning(f"Columnas eliminadas por NaN: {list(cols_eliminadas)}")
+    
+    df_temp = df_temp[cols_validas]
+    
+    if y_obj not in df_temp.columns:
+        st.error("La variable objetivo se ha eliminado por NaN")
+        st.stop()
+    
+    X_cols = [c for c in cols_validas if c != y_obj]
+    
+    if len(X_cols) == 0:
+        st.error("No quedan variables para el modelo")
+        st.stop()
+    
+    df_model = df_temp.dropna()
+    
+    st.write("Filas para modelo:", len(df_model))
 
     X = df_model[X_cols]
     y = df_model[y_obj]
