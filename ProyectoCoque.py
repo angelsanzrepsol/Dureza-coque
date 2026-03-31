@@ -1434,7 +1434,7 @@ with tab4:
     lambda_reg = 0.01
     
     objective = cp.Minimize(
-        cp.norm(X_opt @ A - Y_ml, "fro") +
+        cp.sum_squares(X_opt @ A - Y_ml) +
         lambda_reg * cp.norm(A, "fro")
     )
     
