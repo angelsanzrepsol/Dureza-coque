@@ -1005,7 +1005,7 @@ with tab3:
 
     resultados = []
 
-    for i, col in enumerate(X_cols):
+    for i, col in enumerate(X.colums):
         x_col = X[col].values.reshape(-1, 1)
 
         model = LinearRegression()
