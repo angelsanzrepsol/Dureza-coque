@@ -969,7 +969,6 @@ with tab3:
     # 2. AHORA SÍ limpiar filas (pero ya con columnas buenas)
     df_base = df_temp.dropna()
     # PREPARACIÓN DE DATOS
-    df_base = df[X_cols + [y_obj]].dropna()
 
     if len(df_base) < 20:
         st.warning("Datos insuficientes tras filtros y exclusiones")
@@ -982,7 +981,26 @@ with tab3:
     from sklearn.feature_selection import mutual_info_regression
     from sklearn.linear_model import LinearRegression
     import numpy as np
-
+    # LIMPIEZA ROBUSTA PARA SKLEARN
+    X = X.apply(pd.to_numeric, errors="coerce")
+    y = pd.to_numeric(y, errors="coerce")
+    
+    X = X.replace([np.inf, -np.inf], np.nan)
+    y = y.replace([np.inf, -np.inf], np.nan)
+    
+    # eliminar columnas constantes
+    cols_validas = [c for c in X.columns if X[c].nunique() > 1]
+    X = X[cols_validas]
+    
+    # limpiar NaN finales
+    df_clean = pd.concat([X, y], axis=1).dropna()
+    
+    X = df_clean[X.columns]
+    y = df_clean[y.name]
+    
+    if len(X) < 10:
+        st.error("Muy pocos datos tras limpieza")
+        st.stop()
     mi = mutual_info_regression(X, y, random_state=42)
 
     resultados = []
@@ -1211,7 +1229,9 @@ with tab4:
     
     X_rank = df_clean[X_rank.columns]
     y_rank = df_clean[y_rank.name]
-    
+    # eliminar columnas constantes (CLAVE)
+    cols_validas = [c for c in X_rank.columns if X_rank[c].nunique() > 1]
+    X_rank = X_rank[cols_validas]
     # DEBUG
     st.write("Filas finales para MI:", len(X_rank))
     mi = mutual_info_regression(X_rank, y_rank, random_state=42)
@@ -1488,7 +1508,26 @@ with tab5:
 
     X_rank = df_rank_base[posibles_x]
     y_rank = df_rank_base[y_obj]
-
+    # LIMPIEZA ROBUSTA PARA SKLEARN
+    X = X.apply(pd.to_numeric, errors="coerce")
+    y = pd.to_numeric(y, errors="coerce")
+    
+    X = X.replace([np.inf, -np.inf], np.nan)
+    y = y.replace([np.inf, -np.inf], np.nan)
+    
+    # eliminar columnas constantes
+    cols_validas = [c for c in X.columns if X[c].nunique() > 1]
+    X = X[cols_validas]
+    
+    # limpiar NaN finales
+    df_clean = pd.concat([X, y], axis=1).dropna()
+    
+    X = df_clean[X.columns]
+    y = df_clean[y.name]
+    
+    if len(X) < 10:
+        st.error("Muy pocos datos tras limpieza")
+        st.stop()
     mi = mutual_info_regression(X_rank, y_rank, random_state=42)
 
     ranking = []
