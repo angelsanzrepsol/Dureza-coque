@@ -1395,7 +1395,125 @@ with tab4:
         el mismo conjunto de entrenamiento y el mismo conjunto de validación.
         """
     )
+    # =========================
+    # VARIABLES A OPTIMIZAR
+    # =========================
+    
+    targets_opt = st.multiselect(
+        "Variables objetivo a optimizar (puedes elegir varias)",
+        cols_num,
+        default=[y_obj]
+    )
+    
+    if len(targets_opt) == 0:
+        st.warning("Selecciona al menos una variable objetivo")
+        st.stop()
+    # =========================
+    # DATOS PARA OPTIMIZACIÓN
+    # =========================
+    
+    df_opt = df[X_cols + targets_opt].dropna()
+    
+    X_opt = df_opt[X_cols].values
+    Y_real = df_opt[targets_opt].values
+    
+    # predicción del mejor modelo
+    modelo_best = modelos[mejor_modelo]
+    modelo_best.fit(X, y)  # reentrenar con todo
+    
+    Y_ml = np.column_stack([
+        modelo_best.predict(X_opt) for _ in targets_opt
+    ])
+    import cvxpy as cp
 
+    p = X_opt.shape[1]
+    k = Y_ml.shape[1]
+    
+    A = cp.Variable((p, k))
+    
+    lambda_reg = 0.01
+    
+    objective = cp.Minimize(
+        cp.norm(X_opt @ A - Y_ml, "fro") +
+        lambda_reg * cp.norm(A, "fro")
+    )
+    
+    constraints = [
+        A >= 0
+    ]
+    
+    problem = cp.Problem(objective, constraints)
+    problem.solve(solver=cp.OSQP)
+    
+    A_opt = A.value
+    Y_pred_opt = X_opt @ A_opt
+    from sklearn.metrics import r2_score, mean_absolute_error
+
+    r2_ml = r2_score(Y_real, Y_ml)
+    r2_opt = r2_score(Y_real, Y_pred_opt)
+    
+    mae_ml = mean_absolute_error(Y_real, Y_ml)
+    mae_opt = mean_absolute_error(Y_real, Y_pred_opt)
+    
+    df_metricas_opt = pd.DataFrame({
+        "Modelo": ["ML original", "Optimización QP"],
+        "R2": [r2_ml, r2_opt],
+        "MAE": [mae_ml, mae_opt]
+    })
+    
+    st.markdown("### Comparación ML vs Optimización")
+    
+    st.dataframe(df_metricas_opt, use_container_width=True)
+    df_A = pd.DataFrame(
+        A_opt,
+        index=X_cols,
+        columns=targets_opt
+    )
+    
+    st.markdown("### Matriz de optimización A")
+    
+    st.dataframe(df_A, use_container_width=True)
+    df_A["Importancia"] = df_A.abs().sum(axis=1)
+
+    st.markdown("### Variables más influyentes")
+    
+    st.dataframe(
+        df_A.sort_values("Importancia", ascending=False),
+        use_container_width=True
+    )
+    df_res = pd.DataFrame(Y_real, columns=[f"{c}_real" for c in targets_opt])
+    
+    for i, col in enumerate(targets_opt):
+        df_res[f"{col}_ML"] = Y_ml[:, i]
+        df_res[f"{col}_OPT"] = Y_pred_opt[:, i]
+    
+    st.markdown("### Resultados comparativos")
+    
+    st.dataframe(df_res.head(50), use_container_width=True)
+    for i, col in enumerate(targets_opt):
+
+        df_plot = pd.DataFrame({
+            "Real": Y_real[:, i],
+            "Optimizado": Y_pred_opt[:, i]
+        })
+    
+        fig = px.scatter(
+            df_plot,
+            x="Real",
+            y="Optimizado",
+            title=f"{col} optimizado"
+        )
+    
+        fig.add_shape(
+            type="line",
+            x0=df_plot.min().min(),
+            y0=df_plot.min().min(),
+            x1=df_plot.max().max(),
+            y1=df_plot.max().max(),
+            line=dict(color="black", dash="dash")
+        )
+    
+        st.plotly_chart(fig, use_container_width=True)
 # PESTAÑA 5 
 with tab5:
     st.subheader("Simulador de operación basado en Machine Learning")
