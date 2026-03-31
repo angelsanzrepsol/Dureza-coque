@@ -1199,37 +1199,6 @@ with tab4:
     X_rank = df_rank_base[posibles_x]
     y_rank = df_rank_base[y_obj]
 
-    # LIMPIEZA ROBUSTA ANTES DE MI
-    df_rank_base = df[posibles_x + [y_obj]].copy()
-    
-    # Convertir a numérico
-    df_rank_base = df_rank_base.apply(pd.to_numeric, errors="coerce")
-    
-    # Eliminar NaN e infinitos
-    df_rank_base = df_rank_base.replace([np.inf, -np.inf], np.nan).dropna()
-    
-    # Eliminar columnas constantes
-    cols_validas = [
-        col for col in df_rank_base.columns
-        if df_rank_base[col].nunique() > 1
-    ]
-    
-    df_rank_base = df_rank_base[cols_validas]
-    
-    # Recalcular X e y
-    if y_obj not in df_rank_base.columns:
-        st.error("La variable objetivo no es válida tras limpieza")
-        st.stop()
-    
-    X_rank = df_rank_base.drop(columns=[y_obj])
-    y_rank = df_rank_base[y_obj]
-    
-    # CHECK FINAL (CLAVE)
-    if X_rank.shape[1] == 0:
-        st.error("No hay variables válidas para calcular MI")
-        st.stop()
-    
-    # AHORA SÍ (seguro)
     mi = mutual_info_regression(X_rank, y_rank, random_state=42)
 
     ranking = []
@@ -1476,37 +1445,6 @@ with tab5:
     X_rank = df_rank_base[posibles_x]
     y_rank = df_rank_base[y_obj]
 
-    # LIMPIEZA ROBUSTA ANTES DE MI
-    df_rank_base = df[posibles_x + [y_obj]].copy()
-    
-    # Convertir a numérico
-    df_rank_base = df_rank_base.apply(pd.to_numeric, errors="coerce")
-    
-    # Eliminar NaN e infinitos
-    df_rank_base = df_rank_base.replace([np.inf, -np.inf], np.nan).dropna()
-    
-    # Eliminar columnas constantes
-    cols_validas = [
-        col for col in df_rank_base.columns
-        if df_rank_base[col].nunique() > 1
-    ]
-    
-    df_rank_base = df_rank_base[cols_validas]
-    
-    # Recalcular X e y
-    if y_obj not in df_rank_base.columns:
-        st.error("La variable objetivo no es válida tras limpieza")
-        st.stop()
-    
-    X_rank = df_rank_base.drop(columns=[y_obj])
-    y_rank = df_rank_base[y_obj]
-    
-    # CHECK FINAL (CLAVE)
-    if X_rank.shape[1] == 0:
-        st.error("No hay variables válidas para calcular MI")
-        st.stop()
-    
-    # AHORA SÍ (seguro)
     mi = mutual_info_regression(X_rank, y_rank, random_state=42)
 
     ranking = []
