@@ -1395,6 +1395,100 @@ with tab4:
         el mismo conjunto de entrenamiento y el mismo conjunto de validación.
         """
     )
+    # =========================
+    # OPTIMIZACIÓN CON CVXPY
+    # =========================
+    import cvxpy as cp
+    
+    df_model = df[X_cols + [y_obj]].dropna()
+    
+    X = df_model[X_cols].values
+    Y = df_model[[y_obj]].values
+    
+    n, p = X.shape
+    k = Y.shape[1]
+    
+    # Variable matriz A
+    A = cp.Variable((p, k))
+    
+    # Función objetivo (error cuadrático)
+    lambda_reg = 0.01
+    objective = cp.Minimize(
+        cp.norm(X @ A - Y, "fro") +
+        lambda_reg * cp.norm(A, "fro")
+    )
+    
+    # Restricciones físicas
+    constraints = [
+        A >= 0
+    ]
+    
+    # Resolver
+    problem = cp.Problem(objective, constraints)
+    problem.solve()
+    
+    A_opt = A.value
+    
+    # =========================
+    # PREDICCIÓN OPTIMIZADA
+    # =========================
+    Y_pred_opt = X @ A_opt
+    
+    from sklearn.metrics import r2_score
+    
+    r2_opt = r2_score(Y, Y_pred_opt)
+    # =========================
+    # TABLA COMPARATIVA
+    # =========================
+    
+    r2_ml_best = df_metricas["R2"].max()
+    mejor_modelo = df_metricas["R2"].idxmax()
+    
+    df_comparacion = pd.DataFrame({
+        "Modelo": [mejor_modelo, "Optimización física (QP)"],
+        "R2": [r2_ml_best, r2_opt]
+    })
+    
+    st.markdown("### Comparación de rendimiento")
+    
+    st.dataframe(df_comparacion, use_container_width=True)
+    import plotly.express as px
+    
+    df_plot_opt = pd.DataFrame({
+        "Real": Y.flatten(),
+        "Predicho_QP": Y_pred_opt.flatten()
+    })
+    
+    fig_opt = px.scatter(
+        df_plot_opt,
+        x="Real",
+        y="Predicho_QP",
+        title=f"Modelo optimizado (R² = {r2_opt:.3f})"
+    )
+    
+    fig_opt.add_shape(
+        type="line",
+        x0=df_plot_opt.min().min(),
+        y0=df_plot_opt.min().min(),
+        x1=df_plot_opt.max().max(),
+        y1=df_plot_opt.max().max(),
+        line=dict(color="black", dash="dash")
+    )
+    
+    st.plotly_chart(fig_opt, use_container_width=True)
+    # =========================
+    # MATRIZ A ÓPTIMA
+    # =========================
+    
+    df_A = pd.DataFrame(
+        A_opt,
+        index=X_cols,
+        columns=[y_obj]
+    )
+    
+    st.markdown("### Matriz de coeficientes optimizada")
+    
+    st.dataframe(df_A, use_container_width=True)
 
 # PESTAÑA 5 
 with tab5:
